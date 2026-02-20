@@ -1,0 +1,80 @@
+---
+title: "Security Model"
+description: "Defense-in-depth with five layers of protection"
+icon: "shield"
+---
+
+OpenLegion was designed from day one assuming agents will be compromised. The security model provides defense-in-depth with five layers.
+
+## Five Security Layers
+
+| Layer | Mechanism | What It Prevents |
+|-------|-----------|-----------------|
+| Runtime isolation | **Docker Sandbox microVMs** when available; falls back to Docker containers | Agent escape, kernel exploits |
+| Container hardening | Non-root user, no-new-privileges, memory/CPU limits | Privilege escalation, resource abuse |
+| Credential separation | Vault holds keys, agents call via proxy | Key leakage, unauthorized API use |
+| Permission enforcement | Per-agent ACLs for messaging, blackboard, pub/sub, APIs | Unauthorized data access |
+| Input validation | Path traversal prevention, safe condition eval (no `eval()`), token budgets, iteration limits | Injection, runaway loops |
+
+## Dual Runtime Backend
+
+OpenLegion supports two isolation levels:
+
+| | Docker Containers (default) | Docker Sandbox microVMs |
+|---|---|---|
+| **Isolation** | Shared kernel, namespace separation | Own kernel per agent (hypervisor) |
+| **Escape risk** | Kernel exploit could escape | Hypervisor boundary — much harder |
+| **Performance** | Native speed | Near-native (Rosetta 2 on Apple Silicon) |
+| **Requirements** | Any Docker install | Docker Desktop 4.58+ |
+| **Enable** | `openlegion start` | `openlegion start --sandbox` |
+
+### Docker Containers (default)
+
+Agents run as non-root (UID 1000) with `no-new-privileges`, 512MB memory limit, 50% CPU cap, and no host filesystem access. Secure for most use cases.
+
+### Docker Sandbox microVMs
+
+Each agent gets its own Linux kernel via Apple Virtualization.framework (macOS) or Hyper-V (Windows). Even if an agent achieves code execution, it's trapped inside a lightweight VM with no visibility into other agents or the host.
+
+Use this when running untrusted code or when compliance requires hypervisor isolation.
+
+```bash
+# Default: container isolation (works everywhere)
+openlegion start
+
+# Maximum security: microVM isolation (Docker Desktop 4.58+ required)
+openlegion start --sandbox
+```
+
+<Tip>
+Run `docker sandbox version` to check compatibility. If it returns a version number, your Docker Desktop supports sandboxes.
+</Tip>
+
+## Credential Vault
+
+Agents never hold API keys. The credential vault:
+
+1. Loads credentials from `OPENLEGION_CRED_*` environment variables
+2. Agents make API calls through the mesh proxy endpoint (`/mesh/api`)
+3. The vault injects credentials server-side before forwarding to the provider
+4. Budget limits are checked before dispatching LLM calls
+5. Token usage is recorded after each response
+
+This means even a fully compromised agent cannot exfiltrate API keys — it never sees them.
+
+## Permission Matrix
+
+Every cross-boundary operation is checked against per-agent ACLs defined in `config/permissions.json`. Default policy is **deny**.
+
+Permissions control:
+- Which agents can message each other
+- Which pub/sub topics an agent can publish/subscribe to
+- Which blackboard paths an agent can read/write (glob patterns)
+- Which external APIs an agent can access through the vault
+
+## Input Validation
+
+- **Path traversal prevention**: Agent file operations are confined to `/data` inside the container
+- **Safe condition evaluation**: Workflow conditions use a regex-based safe parser — never `eval()`
+- **Bounded execution**: Agent loops have hard limits (20 iterations for tasks, 10 tool rounds for chat)
+- **Token budgets**: Per-task token limits prevent runaway LLM spend

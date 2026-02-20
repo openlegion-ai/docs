@@ -1,0 +1,137 @@
+---
+title: "Configuration"
+description: "Agents, permissions, mesh settings, and environment variables"
+icon: "gear"
+---
+
+## `PROJECT.md` — Fleet-Wide Context
+
+Shared across all agents. Loaded into every agent's system prompt.
+
+```markdown
+# PROJECT.md
+
+## What We're Building
+SaaS platform for automated lead qualification
+
+## Current Priority
+Ship the email personalization pipeline this week
+
+## Hard Constraints
+- Budget: $50/day total across all agents
+- No cold outreach to .edu or .gov domains
+```
+
+## `config/mesh.yaml` — Framework Settings
+
+```yaml
+mesh:
+  host: "0.0.0.0"
+  port: 8420
+
+llm:
+  default_model: "openai/gpt-4o-mini"
+  embedding_model: "text-embedding-3-small"
+  max_tokens: 4096
+  temperature: 0.7
+```
+
+## `config/agents.yaml` — Agent Definitions
+
+Created automatically by `openlegion setup` or `openlegion agent add`.
+
+```yaml
+agents:
+  researcher:
+    role: "research"
+    model: "openai/gpt-4o-mini"
+    skills_dir: "./skills/research"
+    system_prompt: "You are a research specialist..."
+    resources:
+      memory_limit: "512m"
+      cpu_limit: 0.5
+    budget:
+      daily_usd: 5.00
+      monthly_usd: 100.00
+```
+
+### Agent Config Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `role` | string | Agent's role identifier |
+| `model` | string | LLM model in LiteLLM format (e.g., `openai/gpt-4o-mini`, `anthropic/claude-sonnet-4-20250514`) |
+| `skills_dir` | string | Path to custom skills directory |
+| `system_prompt` | string | Agent's system prompt |
+| `resources.memory_limit` | string | Container memory limit (default: `512m`) |
+| `resources.cpu_limit` | float | CPU quota (default: `0.5`) |
+| `budget.daily_usd` | float | Daily LLM spend cap |
+| `budget.monthly_usd` | float | Monthly LLM spend cap |
+| `mcp_servers` | list | [MCP tool servers](/features/mcp) |
+
+## `config/permissions.json` — Agent Permissions
+
+Per-agent access control with glob patterns for blackboard paths and explicit allowlists for messaging, pub/sub, and API access.
+
+```json
+{
+  "researcher": {
+    "can_message": ["orchestrator"],
+    "can_publish": ["research_complete"],
+    "can_subscribe": ["new_lead"],
+    "blackboard_read": ["tasks/*", "context/*"],
+    "blackboard_write": ["context/prospect_*"],
+    "allowed_apis": ["llm", "brave_search"]
+  }
+}
+```
+
+### Permission Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `can_message` | list | Agents this agent can send messages to |
+| `can_publish` | list | Pub/sub topics this agent can publish to |
+| `can_subscribe` | list | Pub/sub topics this agent can subscribe to |
+| `blackboard_read` | list | Glob patterns for readable blackboard keys |
+| `blackboard_write` | list | Glob patterns for writable blackboard keys |
+| `allowed_apis` | list | External APIs accessible through the vault |
+
+Default policy is **deny** — agents can only do what's explicitly permitted.
+
+## `config/workflows/*.yaml` — Workflow Definitions
+
+See [Workflows](/features/workflows) for the full specification.
+
+## `.env` — API Keys
+
+Managed automatically by `openlegion setup` and `openlegion channels add`. Can also be edited directly:
+
+```bash
+OPENLEGION_CRED_ANTHROPIC_API_KEY=sk-ant-...
+OPENLEGION_CRED_MOONSHOT_API_KEY=sk-...
+OPENLEGION_CRED_OPENAI_API_KEY=sk-...
+OPENLEGION_CRED_BRAVE_SEARCH_API_KEY=BSA...
+OPENLEGION_CRED_TELEGRAM_BOT_TOKEN=123456:ABC...
+OPENLEGION_CRED_DISCORD_BOT_TOKEN=MTIz...
+
+# Log format: "json" (default) or "text" (human-readable)
+OPENLEGION_LOG_FORMAT=text
+```
+
+All `OPENLEGION_CRED_*` variables are loaded by the credential vault and never exposed to agent containers.
+
+## Project Structure
+
+```
+config/
+├── mesh.yaml                           # Framework settings
+├── agents.yaml                         # Agent definitions (per-project)
+├── permissions.json                    # Per-agent ACLs
+├── cron.json                           # Persistent cron jobs
+├── watchers.yaml                       # File watcher definitions
+└── workflows/                          # Workflow YAML definitions
+
+PROJECT.md                              # Fleet-wide context
+.env                                    # API keys (gitignored)
+```

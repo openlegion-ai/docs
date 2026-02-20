@@ -1,0 +1,72 @@
+---
+title: "Agents"
+description: "How agents work inside their containers"
+icon: "robot"
+---
+
+Each agent container runs a FastAPI server with endpoints for task assignment, chat, status, capabilities, and results.
+
+## Agent Container
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Agent Container                           │
+│                                                              │
+│  FastAPI Server (:8400)                                      │
+│    POST /task    POST /chat    POST /chat/reset               │
+│    GET /status   GET /result   GET /capabilities              │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐    │
+│  │                     AgentLoop                         │    │
+│  │                                                       │    │
+│  │  Task Mode: bounded 20-iteration loop                 │    │
+│  │  Chat Mode: conversational with tool use              │    │
+│  │                                                       │    │
+│  │  Both: LLM call -> tool execution -> context mgmt     │    │
+│  └──┬──────────┬──────────┬──────────┬──────────┬───────┘    │
+│     │          │          │          │          │             │
+│  ┌──▼───┐  ┌──▼───┐  ┌──▼──────┐ ┌─▼──────┐ ┌─▼─────────┐ │
+│  │ LLM  │  │ Mesh │  │ Skill   │ │Work-   │ │ Context   │ │
+│  │Client│  │Client│  │Registry │ │space   │ │ Manager   │ │
+│  │(mesh │  │(HTTP)│  │(builtins│ │Manager │ │(token     │ │
+│  │proxy)│  │      │  │+custom) │ │(/data/ │ │tracking,  │ │
+│  └──────┘  └──────┘  └─────────┘ │workspace│ │compact)   │ │
+│                                   └─────────┘ └───────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Task Mode
+
+Accepts a `TaskAssignment` from the orchestrator. Runs a bounded loop (max 20 iterations) of **decide -> act -> learn**. Returns a `TaskResult` with structured output and optional blackboard promotions.
+
+Task mode is used for workflow steps where an agent is given a specific objective with expected output.
+
+## Chat Mode
+
+Accepts a user message. On the first message, loads workspace context (AGENTS.md, SOUL.md, USER.md, MEMORY.md) into the system prompt and searches memory for relevant facts. Executes tool calls in a bounded loop (max 30 rounds) and runs context compaction when needed.
+
+Chat mode is used for interactive conversations via CLI, Telegram, or Discord.
+
+## Self-Extending Skills
+
+Agents can write their own Python skills at runtime using the `create_skill` tool and hot-reload them. Custom skills are Python functions decorated with `@skill`, auto-discovered from the agent's `skills_dir` at startup.
+
+```python
+@skill(
+    name="your_tool",
+    description="What this does and when to use it",
+    parameters={
+        "param1": {"type": "string", "description": "What this param is for"},
+    },
+)
+async def your_tool(param1: str, *, mesh_client=None) -> dict:
+    return {"result": "value"}
+```
+
+## Self-Improving via Learnings
+
+Agents track tool failures in `learnings/errors.md` and user corrections in `learnings/corrections.md`. These are automatically injected into the system prompt each session, so agents avoid repeating past mistakes.
+
+## Sub-Agents
+
+Agents can spawn ephemeral sub-agents using the `spawn_agent` tool for specialized work. Sub-agents inherit the parent's mesh connection but run independently.

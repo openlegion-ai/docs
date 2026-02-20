@@ -1,0 +1,44 @@
+---
+title: "Cost Tracking & Budgets"
+description: "Per-agent LLM spend tracking with budget enforcement"
+icon: "dollar-sign"
+---
+
+Every LLM call is tracked at the Credential Vault layer. Per-agent budgets prevent runaway spend.
+
+## How It Works
+
+1. Agent makes an LLM call through the mesh proxy
+2. The vault checks the agent's remaining budget **before** forwarding to the provider
+3. If the agent has exceeded its budget, the vault rejects the call with an error
+4. After a successful call, token usage and cost are recorded in the cost tracker (SQLite)
+
+Agents physically cannot spend what you haven't authorized.
+
+## Configuring Budgets
+
+Set per-agent budgets in `config/agents.yaml`:
+
+```yaml
+agents:
+  researcher:
+    budget:
+      daily_usd: 5.00
+      monthly_usd: 100.00
+```
+
+When an agent exceeds its daily or monthly budget, subsequent LLM calls are rejected until the budget resets.
+
+## Viewing Costs
+
+From the interactive REPL:
+
+```
+/costs
+```
+
+This shows today's spend per agent, including token counts and dollar amounts.
+
+## Model Failover and Costs
+
+When using [failover chains](/concepts/architecture#model-failover), cost tracking follows the call to whichever model actually handles it. If the primary model fails and the request cascades to a cheaper fallback, only the fallback cost is recorded.

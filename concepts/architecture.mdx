@@ -1,0 +1,132 @@
+---
+title: "Architecture"
+description: "How agents, the mesh host, and trust zones work together"
+icon: "sitemap"
+---
+
+OpenLegion separates concerns across three trust zones: untrusted external input, sandboxed agent containers, and a trusted mesh host that holds credentials and coordinates the fleet. All inter-agent communication flows through the mesh — no agent has direct network access or peer-to-peer connections.
+
+## Overview
+
+```
+User (CLI REPL / Telegram / Discord / Webhook)
+  -> Mesh Host (FastAPI :8420) — routes messages, enforces permissions, proxies APIs
+    -> Agent Containers (FastAPI :8400 each) — isolated execution with private memory
+```
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                           User Interface                                │
+│                                                                         │
+│   CLI (click)          Webhooks            Cron Scheduler               │
+│   - setup              - POST /webhook/    - "0 9 * * 1-5"             │
+│   - start (REPL)         hook/{id}         - "every 30m"               │
+│   - stop / status      - Trigger agents    - Heartbeat pattern          │
+│   - agent add/list                                                      │
+└──────────────┬──────────────────┬──────────────────┬────────────────────┘
+               │                  │                  │
+               ▼                  ▼                  ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                         Mesh Host (FastAPI)                              │
+│                         Port 8420 (default)                              │
+│                                                                         │
+│  ┌────────────┐ ┌─────────┐ ┌───────────┐ ┌────────────────────────┐   │
+│  │ Blackboard │ │ PubSub  │ │  Message   │ │   Credential Vault     │   │
+│  │ (SQLite)   │ │         │ │  Router    │ │   (API Proxy)          │   │
+│  │            │ │ Topics, │ │            │ │                        │   │
+│  │ Key-value, │ │ subs,   │ │ Permission │ │ LLM, Anthropic,       │   │
+│  │ versioned, │ │ notify  │ │ enforced   │ │ OpenAI, Apollo,        │   │
+│  │ TTL, GC    │ │         │ │ routing    │ │ Hunter, Brave Search   │   │
+│  └────────────┘ └─────────┘ └───────────┘ └────────────────────────┘   │
+│                                                                         │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐   │
+│  │ Orchestrator │ │  Permission  │ │  Container   │ │    Cost      │   │
+│  │              │ │  Matrix      │ │  Manager     │ │   Tracker    │   │
+│  │ DAG executor,│ │              │ │              │ │              │   │
+│  │ step deps,   │ │ Per-agent    │ │ Docker life- │ │ Per-agent    │   │
+│  │ conditions,  │ │ ACLs, globs, │ │ cycle, nets, │ │ token/cost,  │   │
+│  │ retry/fail   │ │ default deny │ │ volumes      │ │ budgets      │   │
+│  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘   │
+└──────────────────────────────────────────────────────────────────────────┘
+               │
+               │  Docker Network (bridge / host)
+               │
+     ┌─────────┼──────────┬──────────────────────┐
+     ▼         ▼          ▼                      ▼
+┌─────────┐ ┌─────────┐ ┌─────────┐       ┌─────────┐
+│ Agent A │ │ Agent B │ │ Agent C │  ...  │ Agent N │
+│ :8401   │ │ :8402   │ │ :8403   │       │ :840N   │
+└─────────┘ └─────────┘ └─────────┘       └─────────┘
+  Each agent: isolated Docker container, own /data volume,
+  own memory DB, own workspace, 512MB RAM, 0.5 CPU cap
+```
+
+## Trust Zones
+
+| Level | Zone | Description |
+|-------|------|-------------|
+| 0 | **Untrusted** | External input (webhooks, user prompts). Sanitized before reaching agents. |
+| 1 | **Sandboxed** | Agent containers. Isolated filesystem, no external network, no credentials. |
+| 2 | **Trusted** | Mesh host. Holds credentials, manages containers, routes messages. |
+
+## Mesh Host
+
+The mesh host is the central coordination layer — a single FastAPI process running on the host machine.
+
+### Blackboard (Shared State Store)
+
+SQLite-backed key-value store with versioning, TTL, and garbage collection.
+
+| Namespace | Purpose | Example |
+|-----------|---------|---------|
+| `tasks/*` | Task assignments | `tasks/research_abc123` |
+| `context/*` | Shared agent context | `context/prospect_acme` |
+| `signals/*` | Inter-agent signals | `signals/research_complete` |
+| `history/*` | Append-only audit log | `history/action_xyz` |
+
+### Credential Vault (API Proxy)
+
+Agents never hold API keys. All external API calls route through the mesh. The vault loads credentials from `OPENLEGION_CRED_*` environment variables and supports multiple providers. Budget limits are enforced before dispatching LLM calls and token usage is recorded after each response.
+
+### Model Failover
+
+Configurable failover chains cascade across LLM providers transparently. `ModelHealthTracker` applies exponential cooldown per model (transient errors: 60s -> 300s -> 1500s, billing/auth errors: 1h). Permanent errors (400, 404) don't cascade. Streaming failover is supported — if a connection fails mid-stream, the next model in the chain picks up.
+
+### Permission Matrix
+
+Every inter-agent operation is checked against per-agent ACLs:
+
+```json
+{
+  "researcher": {
+    "can_message": ["orchestrator"],
+    "can_publish": ["research_complete"],
+    "can_subscribe": ["new_lead"],
+    "blackboard_read": ["tasks/*", "context/*"],
+    "blackboard_write": ["context/prospect_*"],
+    "allowed_apis": ["llm", "brave_search"]
+  }
+}
+```
+
+### Container Manager
+
+Each agent runs in an isolated Docker container with:
+- **Image**: `openlegion-agent:latest` (Python 3.12, system tools, Playwright, Chromium)
+- **Network**: Bridge with port mapping (macOS/Windows) or host network (Linux)
+- **Volume**: `openlegion_data_{agent_id}` mounted at `/data`
+- **Resources**: 512MB RAM limit, 50% CPU quota
+- **Security**: `no-new-privileges`, runs as non-root `agent` user (UID 1000)
+
+## Design Principles
+
+| Principle | Rationale |
+|-----------|-----------|
+| Messages, not method calls | Agents communicate through HTTP/JSON. Never shared memory or direct invocation. |
+| The mesh is the only door | No agent has network access except through the mesh. No agent holds credentials. |
+| Private by default, shared by promotion | Agents keep knowledge private. Facts are explicitly promoted to the blackboard. |
+| Explicit failure handling | Every workflow step declares what happens on failure. No silent error swallowing. |
+| Small enough to audit | ~11,000 total lines. The entire codebase is auditable in a day. |
+| Skills over features | New capabilities are agent skills, not mesh or orchestrator code. |
+| SQLite for all state | Single-file databases. No external services. WAL mode for concurrent reads. |
+| Zero vendor lock-in | LiteLLM supports 100+ providers. Markdown workspace files. No proprietary formats. |

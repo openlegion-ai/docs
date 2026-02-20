@@ -1,0 +1,57 @@
+---
+title: "OpenLegion"
+description: "Autonomous AI agent fleets — isolated, auditable, and production-ready"
+---
+
+## What is OpenLegion?
+
+OpenLegion is an open-source framework for running autonomous AI agent fleets in isolated Docker containers. Every agent gets its own memory, tools, schedule, and budget — coordinated through deterministic YAML workflows with no LLM routing layer.
+
+API keys never leave the vault. Agents call through a proxy and never handle credentials directly. Chat with your fleet via **Telegram**, **Discord**, or CLI.
+
+**495 tests** across **~11,000 lines** of application code. Fully auditable in a day.
+No LangChain. No Redis. No Kubernetes. No CEO agent. MIT License.
+
+<Card title="Quick Start" icon="rocket" href="/quickstart" horizontal>
+  Install OpenLegion and launch your first agent fleet in under 3 minutes.
+</Card>
+
+## Why OpenLegion?
+
+<Columns cols={2}>
+  <Card title="Security by Architecture" icon="shield">
+    Every agent runs in an isolated Docker container (microVM when available). API keys live in a credential vault — agents never see them. Defense-in-depth with 5 security layers.
+  </Card>
+  <Card title="Deterministic Orchestration" icon="diagram-project">
+    YAML-defined DAG workflows with step dependencies, conditions, retries, and failure handlers. No LLM decides what runs next.
+  </Card>
+  <Card title="Cost Controls" icon="dollar-sign">
+    Per-agent LLM token tracking with enforced daily and monthly budget caps at the vault layer. Agents physically cannot spend what you haven't authorized.
+  </Card>
+  <Card title="Self-Improving Agents" icon="brain">
+    Agents learn from tool failures and user corrections, injecting past learnings into future sessions. They write their own Python skills at runtime and hot-reload them.
+  </Card>
+  <Card title="Multi-Channel" icon="comments">
+    Connect agents to Telegram and Discord. Also accessible via CLI and API.
+  </Card>
+  <Card title="100+ LLM Providers" icon="plug">
+    Configurable model failover chains cascade across LLM providers with per-model health tracking and exponential cooldown via LiteLLM.
+  </Card>
+</Columns>
+
+## Explore the docs
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Trust zones, mesh host, and agent containers.
+  </Card>
+  <Card title="Agent Tools" icon="toolbox" href="/reference/agent-tools">
+    37 built-in tools including browser automation, web search, and memory.
+  </Card>
+  <Card title="Workflows" icon="diagram-project" href="/features/workflows">
+    Deterministic DAG workflows for multi-agent orchestration.
+  </Card>
+  <Card title="Configuration" icon="gear" href="/reference/configuration">
+    Agents, permissions, mesh settings, and environment variables.
+  </Card>
+</CardGroup>

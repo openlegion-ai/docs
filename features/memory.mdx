@@ -1,0 +1,88 @@
+---
+title: "Memory System"
+description: "Five layers of persistent, self-improving memory"
+icon: "brain"
+---
+
+Five layers give agents persistent, self-improving memory across sessions.
+
+## Memory Layers
+
+```
+Layer 5: Context Manager          <- Manages the LLM's context window
+  |  Monitors token usage
+  |  Proactive flush at 60% capacity
+  |  Auto-compacts at 70% capacity
+  |  Extracts facts before discarding messages
+  |
+Layer 4: Learnings                <- Self-improvement through failure tracking
+  |  learnings/errors.md         (tool failures with context)
+  |  learnings/corrections.md   (user corrections and preferences)
+  |  Auto-injected into system prompt each session
+  |
+Layer 3: Workspace Files          <- Durable, human-readable storage
+  |  AGENTS.md, SOUL.md, USER.md  (loaded into system prompt)
+  |  MEMORY.md                    (curated long-term facts)
+  |  HEARTBEAT.md                 (autonomous monitoring rules)
+  |  memory/YYYY-MM-DD.md         (daily session logs)
+  |  BM25 search across all files
+  |
+Layer 2: Structured Memory DB     <- Hierarchical vector database
+  |  SQLite + sqlite-vec + FTS5
+  |  Facts with embeddings (KNN similarity search)
+  |  Auto-categorization with category-scoped search
+  |  3-tier retrieval: categories -> scoped facts -> flat fallback
+  |  Reinforcement scoring with access-count boost + recency decay
+  |
+Layer 1: Salience Tracking        <- Prioritizes important facts
+     Access count, decay score, last accessed timestamp
+     High-salience facts auto-surface in initial context
+```
+
+## Write-Then-Compact Pattern
+
+Before the context manager discards messages, it:
+
+1. Asks the LLM to extract important facts from the conversation
+2. Stores facts in both `MEMORY.md` and the structured memory DB
+3. Summarizes the conversation
+4. Replaces message history with: summary + last 4 messages
+
+Nothing is permanently lost during compaction.
+
+## Cross-Session Memory
+
+Facts saved with `memory_save` are stored in both the workspace (daily log) and the structured SQLite database. After a reset or restart, `memory_recall` retrieves them via semantic search:
+
+```
+Session 1: User says "My cat's name is Whiskerino"
+           Agent saves to daily log + structured DB
+
+  === Chat Reset ===
+
+Session 2: User asks "What is my cat's name?"
+           Agent recalls "Whiskerino" via memory_recall
+```
+
+## Memory Tools
+
+| Tool | Purpose |
+|------|---------|
+| `memory_search` | Hybrid search across workspace files and structured DB |
+| `memory_save` | Save fact to workspace and structured memory DB |
+| `memory_recall` | Semantic search over structured facts with category filtering |
+
+## Workspace Files
+
+Each agent has a persistent workspace at `/data/workspace/`:
+
+| File | Purpose |
+|------|---------|
+| `AGENTS.md` | Fleet-wide agent descriptions (loaded into system prompt) |
+| `SOUL.md` | Agent personality and behavioral instructions |
+| `USER.md` | User preferences and context |
+| `MEMORY.md` | Curated long-term facts |
+| `HEARTBEAT.md` | Autonomous monitoring rules |
+| `memory/YYYY-MM-DD.md` | Daily session logs |
+| `learnings/errors.md` | Tool failure history |
+| `learnings/corrections.md` | User correction history |

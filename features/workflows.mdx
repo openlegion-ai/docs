@@ -1,0 +1,69 @@
+---
+title: "Workflows"
+description: "Deterministic DAG workflows for multi-agent orchestration"
+icon: "diagram-project"
+---
+
+Workflows are YAML-defined directed acyclic graphs (DAGs) that chain agents in sequence with dependencies, conditions, retries, and failure handlers. No LLM decides what runs next — execution is deterministic and auditable.
+
+## Defining a Workflow
+
+Workflows live in `config/workflows/*.yaml`:
+
+```yaml
+name: prospect_pipeline
+trigger: new_prospect
+timeout: 600
+steps:
+  - id: research
+    agent: research
+    task_type: research_prospect
+    input_from: trigger.payload
+  - id: qualify
+    agent: qualify
+    task_type: qualify_lead
+    depends_on: [research]
+    condition: "research.result.score >= 5"
+```
+
+## Step Dependencies
+
+Steps declare which other steps they depend on via `depends_on`. The orchestrator resolves the DAG and executes steps in the correct order, running independent steps concurrently where possible.
+
+## Conditions
+
+Step conditions use a safe expression evaluator (no `eval()`) to check results from previous steps. A step only executes if its condition evaluates to true.
+
+Supported operators: `>=`, `<=`, `>`, `<`, `==`, `!=`, `and`, `or`, `not`.
+
+## Retries and Failure Handlers
+
+Each step can declare retry policies and failure handlers:
+
+```yaml
+steps:
+  - id: fetch_data
+    agent: researcher
+    task_type: fetch
+    retry:
+      max_attempts: 3
+      delay: 30
+    on_failure:
+      action: skip  # or "abort" to stop the workflow
+```
+
+## Triggering Workflows
+
+Workflows can be triggered by:
+- **Pub/Sub events**: An agent publishes an event matching the workflow's `trigger` field
+- **Webhooks**: External systems POST to a webhook URL
+- **Manual dispatch**: Via the CLI or REPL
+
+## How the Orchestrator Works
+
+1. Receives a trigger event matching a workflow's `trigger` field
+2. Builds the DAG from step dependencies
+3. Executes steps in topological order
+4. For each step: checks conditions, dispatches task to the agent, waits for result
+5. On failure: applies retry policy, then failure handler
+6. Workflow completes when all steps finish or a failure handler aborts

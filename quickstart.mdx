@@ -1,0 +1,106 @@
+---
+title: "Quick Start"
+description: "Install OpenLegion and launch your first agent fleet"
+---
+
+## Requirements
+
+- Python 3.10+
+- Docker (running)
+- An LLM API key ([Anthropic](https://console.anthropic.com/) / [OpenAI](https://platform.openai.com/api-keys) / [Moonshot](https://platform.moonshot.cn/) / any of 100+ providers)
+
+## Install and launch
+
+<Steps>
+<Step title="Clone and install">
+
+<CodeGroup>
+```bash macOS / Linux
+git clone https://github.com/openlegion-ai/openlegion.git && cd openlegion
+./install.sh                     # checks deps, creates venv, makes CLI global
+```
+
+```powershell Windows
+git clone https://github.com/openlegion-ai/openlegion.git
+cd openlegion
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+</CodeGroup>
+
+<Note>
+First install downloads ~70 packages and takes 2-3 minutes. Subsequent installs are fast.
+</Note>
+</Step>
+
+<Step title="Run guided setup">
+
+```bash
+openlegion setup
+```
+
+The setup wizard walks you through:
+- Entering your LLM API key
+- Describing your project (loaded into every agent's system prompt)
+- Choosing a team template
+
+**Team Templates:**
+
+| Template | Agents | Use Case |
+|----------|--------|----------|
+| `starter` | assistant | Single general-purpose agent |
+| `sales` | researcher, qualifier, outreach | Sales pipeline |
+| `devteam` | pm, engineer, reviewer | Software development |
+| `content` | researcher, writer, editor | Content creation |
+
+</Step>
+
+<Step title="Start your fleet">
+
+```bash
+openlegion start
+```
+
+This launches the mesh host, spins up agent containers, and drops you into the interactive REPL. Start chatting with your agents immediately.
+</Step>
+</Steps>
+
+## Common operations
+
+```bash
+# Add more agents later
+openlegion agent add researcher
+
+# Check status
+openlegion status
+
+# Run in background
+openlegion start -d
+openlegion chat researcher   # connect from another terminal
+openlegion stop              # clean shutdown
+```
+
+## Connect a channel
+
+```bash
+openlegion channels add telegram    # prompts for bot token from @BotFather
+openlegion channels add discord     # prompts for bot token
+```
+
+On next `openlegion start`, a pairing code appears — send it to your bot to link.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Understand how agents, the mesh host, and trust zones work together.
+  </Card>
+  <Card title="CLI Reference" icon="terminal" href="/reference/cli">
+    All CLI commands and interactive REPL commands.
+  </Card>
+  <Card title="Configuration" icon="gear" href="/reference/configuration">
+    Customize agents, permissions, models, and budgets.
+  </Card>
+  <Card title="Workflows" icon="diagram-project" href="/features/workflows">
+    Chain agents together with deterministic DAG workflows.
+  </Card>
+</CardGroup>

@@ -1,0 +1,116 @@
+---
+title: "CLI Reference"
+description: "All CLI commands and interactive REPL commands"
+icon: "terminal"
+---
+
+## CLI Commands
+
+```
+openlegion
+├── setup                                # Guided setup wizard
+├── start [--config PATH] [-d] [--sandbox]  # Start runtime + interactive REPL
+├── stop                                 # Stop all containers
+├── chat <name> [--port PORT]            # Connect to a running agent
+├── status [--port PORT]                 # Show agent status
+│
+├── agent
+│   ├── add [name]                       # Add a new agent
+│   ├── list                             # List configured agents
+│   └── remove <name> [--yes]            # Remove an agent
+│
+└── channels
+    ├── add [telegram|discord]           # Connect a messaging channel
+    ├── list                             # Show configured channels
+    └── remove <telegram|discord>        # Disconnect a channel
+```
+
+## Command Details
+
+### `openlegion setup`
+
+Guided setup wizard that walks you through:
+- Entering your LLM API key
+- Describing your project
+- Choosing a team template (starter, sales, devteam, content)
+
+### `openlegion start`
+
+Launches the mesh host, spins up agent containers, and starts the interactive REPL.
+
+| Flag | Description |
+|------|-------------|
+| `--config PATH` | Path to custom config directory |
+| `-d` | Run in background (daemon mode) |
+| `--sandbox` | Use Docker Sandbox microVMs for maximum isolation |
+
+### `openlegion stop`
+
+Cleanly shuts down all agent containers and the mesh host.
+
+### `openlegion chat <name>`
+
+Connect to a running agent from a separate terminal. Useful when running in daemon mode.
+
+| Flag | Description |
+|------|-------------|
+| `--port PORT` | Mesh host port (default: 8420) |
+
+### `openlegion status`
+
+Show health and status of all running agents.
+
+### `openlegion agent add [name]`
+
+Add a new agent. If no name is given, prompts interactively for agent configuration.
+
+### `openlegion agent list`
+
+List all configured agents with their roles and models.
+
+### `openlegion agent remove <name>`
+
+Remove an agent from the configuration.
+
+| Flag | Description |
+|------|-------------|
+| `--yes` | Skip confirmation prompt |
+
+### `openlegion channels add [telegram|discord]`
+
+Connect a messaging channel. Prompts for the bot token.
+
+### `openlegion channels list`
+
+Show all configured channels and their status.
+
+### `openlegion channels remove <telegram|discord>`
+
+Disconnect a channel.
+
+## Interactive REPL Commands
+
+When running `openlegion start`, you're in the interactive REPL:
+
+| Command | Description |
+|---------|-------------|
+| `@agent <message>` | Send message to a specific agent |
+| `/use <agent>` | Switch active agent |
+| `/agents` | List all running agents |
+| `/add` | Add a new agent (hot-adds to running system) |
+| `/status` | Show agent health |
+| `/broadcast <msg>` | Send message to all agents |
+| `/costs` | Show today's LLM spend |
+| `/reset` | Clear conversation with active agent |
+| `/quit` | Exit and stop runtime |
+
+## Team Templates
+
+Templates offered during `openlegion setup`:
+
+| Template | Agents | Description |
+|----------|--------|-------------|
+| `starter` | assistant | Single general-purpose agent |
+| `sales` | researcher, qualifier, outreach | Sales pipeline team |
+| `devteam` | pm, engineer, reviewer | Software development team |
+| `content` | researcher, writer, editor | Content creation team |

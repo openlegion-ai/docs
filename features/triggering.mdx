@@ -1,0 +1,53 @@
+---
+title: "Triggering & Automation"
+description: "Cron, heartbeats, webhooks, and file watchers"
+icon: "clock"
+---
+
+Agents act autonomously through trigger mechanisms running in the mesh host (not inside containers, so they survive container restarts).
+
+## Cron Scheduler
+
+Persistent cron jobs that dispatch messages to agents on a schedule. Agents can schedule their own jobs using the `set_cron` tool.
+
+Supports:
+- **5-field cron expressions**: `minute hour dom month dow` (e.g., `0 9 * * 1-5` for weekdays at 9am)
+- **Interval shorthand**: `every 30m`, `every 2h`
+- **State persisted** to `config/cron.json`
+
+## Heartbeat System
+
+Cost-efficient autonomous monitoring. Heartbeat jobs run cheap deterministic probes first — disk usage, pending signals, pending tasks — and only dispatch to the agent (costing LLM tokens) when probes detect something actionable.
+
+This 5-stage architecture makes always-on agents economically viable:
+
+1. **Scheduler** — triggers at the configured interval
+2. **Probes** — lightweight checks (no LLM cost)
+3. **Policy** — evaluates probe results against thresholds
+4. **Escalation** — dispatches to the agent only when needed
+5. **Action** — agent processes the alert with full LLM capabilities
+
+## Webhook Endpoints
+
+Named webhook URLs that dispatch payloads to agents:
+
+```bash
+curl -X POST http://localhost:8420/webhook/hook/hook_a1b2c3d4 \
+  -H "Content-Type: application/json" \
+  -d '{"event": "push", "repo": "myproject"}'
+```
+
+Webhooks can also trigger [workflows](/features/workflows).
+
+## File Watchers
+
+Poll directories for new/modified files matching glob patterns. Uses polling (not inotify) for Docker volume compatibility.
+
+```yaml
+# config/watchers.yaml
+watchers:
+  - path: "/data/inbox"
+    pattern: "*.csv"
+    agent: "researcher"
+    message: "New prospect list uploaded: {filename}. Begin research."
+```

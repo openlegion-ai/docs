@@ -1,0 +1,48 @@
+---
+title: "Channels"
+description: "Connect agents to Telegram, Discord, and more"
+icon: "comments"
+---
+
+Chat with your agent fleet via **Telegram**, **Discord**, or **CLI**. Channels provide a unified interface for interacting with agents from any platform.
+
+## Connecting Channels
+
+```bash
+openlegion channels add telegram    # prompts for bot token from @BotFather
+openlegion channels add discord     # prompts for bot token
+openlegion channels list            # check what's connected
+openlegion channels remove telegram # disconnect
+```
+
+On next `openlegion start`, a pairing code appears — send it to your bot to link.
+
+## Supported Channels
+
+| Channel | Setup | Features |
+|---------|-------|----------|
+| **CLI REPL** | Built-in | `@agent` mentions, `/commands`, broadcast |
+| **Telegram** | Bot token from @BotFather | Per-user agent routing, chunked messages |
+| **Discord** | Bot token from Discord Developer Portal | Per-user agent routing, chunked messages |
+
+## How Channels Work
+
+All channels share a common base class that provides:
+- **@agent routing**: Mention an agent by name to direct your message
+- **Slash commands**: `/use`, `/agents`, `/status`, `/costs`, `/reset`, `/broadcast`
+- **Per-user routing**: Each user's messages route to their selected agent
+- **Message chunking**: Long responses are automatically split for platform limits
+
+## Channel Commands
+
+These commands work across all channels:
+
+| Command | Description |
+|---------|-------------|
+| `@agent <message>` | Send message to a specific agent |
+| `/use <agent>` | Switch your active agent |
+| `/agents` | List all running agents |
+| `/status` | Show agent health |
+| `/costs` | Show today's LLM spend |
+| `/reset` | Clear conversation with active agent |
+| `/broadcast <msg>` | Send message to all agents |

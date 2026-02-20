@@ -1,0 +1,100 @@
+---
+title: "Agent Tools"
+description: "All built-in tools available to agents"
+icon: "toolbox"
+---
+
+Every agent has access to these built-in tools. Agents can also [create custom skills](/features/agents#self-extending-skills) at runtime and use [MCP tool servers](/features/mcp).
+
+## Execution
+
+| Tool | Purpose |
+|------|---------|
+| `exec` | Shell command execution with timeout |
+
+## File Operations
+
+| Tool | Purpose |
+|------|---------|
+| `read_file` | Read file contents from `/data` |
+| `write_file` | Write/append file in `/data` |
+| `list_files` | List/glob files in `/data` |
+
+## HTTP
+
+| Tool | Purpose |
+|------|---------|
+| `http_request` | HTTP GET/POST/PUT/DELETE/PATCH |
+
+## Browser Automation
+
+| Tool | Purpose |
+|------|---------|
+| `browser_navigate` | Open URL, extract page text |
+| `browser_snapshot` | Accessibility tree snapshot with element refs (e1, e2, ...) |
+| `browser_screenshot` | Capture page screenshot |
+| `browser_click` | Click element by ref or CSS selector |
+| `browser_type` | Fill input by ref or CSS selector |
+| `browser_evaluate` | Run JavaScript in page |
+
+Browser tools use Playwright with Chromium, pre-installed in the agent container image.
+
+## Memory
+
+| Tool | Purpose |
+|------|---------|
+| `memory_search` | Hybrid search across workspace files and structured DB |
+| `memory_save` | Save fact to workspace and structured memory DB |
+| `memory_recall` | Semantic search over structured facts with category filtering |
+
+See the [Memory System](/features/memory) for details on the 5-layer memory architecture.
+
+## Web Search
+
+| Tool | Purpose |
+|------|---------|
+| `web_search` | Search the web via DuckDuckGo (no API key required) |
+
+## Fleet Awareness
+
+| Tool | Purpose |
+|------|---------|
+| `list_agents` | Discover other agents in the fleet |
+| `read_agent_history` | Read another agent's conversation logs |
+
+## Shared State (Blackboard)
+
+| Tool | Purpose |
+|------|---------|
+| `read_shared_state` | Read from the shared blackboard |
+| `write_shared_state` | Write to the shared blackboard |
+| `list_shared_state` | Browse blackboard entries by prefix |
+| `publish_event` | Publish event to mesh pub/sub |
+| `save_artifact` | Save deliverable file and register on blackboard |
+
+All blackboard operations are subject to [permission checks](/reference/configuration#configpermissionsjson--agent-permissions).
+
+## Scheduling
+
+| Tool | Purpose |
+|------|---------|
+| `set_cron` | Schedule a recurring job |
+| `set_heartbeat` | Enable autonomous monitoring with probes |
+| `list_cron` | List scheduled jobs |
+| `remove_cron` | Remove a scheduled job |
+
+See [Triggering & Automation](/features/triggering) for details.
+
+## Skills Management
+
+| Tool | Purpose |
+|------|---------|
+| `create_skill` | Write a new Python skill at runtime |
+| `list_custom_skills` | List all custom skills the agent has created |
+| `reload_skills` | Hot-reload all skills |
+
+## Sub-Agents
+
+| Tool | Purpose |
+|------|---------|
+| `spawn_agent` | Spawn an ephemeral sub-agent for specialized work |

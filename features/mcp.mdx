@@ -1,0 +1,67 @@
+---
+title: "MCP Tool Support"
+description: "Plug in any MCP-compatible tool server"
+icon: "plug"
+---
+
+OpenLegion supports the **[Model Context Protocol (MCP)](https://modelcontextprotocol.io)** — the emerging standard for LLM tool interoperability. Any MCP-compatible tool server can be plugged into an agent via config, with tools automatically discovered and exposed to the LLM alongside built-in skills.
+
+## Configuration
+
+Add `mcp_servers` to any agent in `config/agents.yaml`:
+
+```yaml
+agents:
+  researcher:
+    role: "research"
+    model: "openai/gpt-4o-mini"
+    mcp_servers:
+      - name: filesystem
+        command: mcp-server-filesystem
+        args: ["/data"]
+      - name: database
+        command: mcp-server-sqlite
+        args: ["--db", "/data/research.db"]
+```
+
+Each server is launched as a subprocess inside the agent container using stdio transport. Tools are discovered automatically via the MCP protocol and appear in the LLM's tool list alongside built-in skills.
+
+## How It Works
+
+1. Agent container reads `MCP_SERVERS` from environment (set by the runtime)
+2. `MCPClient` launches each server subprocess via stdio transport
+3. MCP protocol handshake discovers available tools and their schemas
+4. Tools are registered in `SkillRegistry` with OpenAI function-calling format
+5. LLM tool calls route through `MCPClient.call_tool()` to the correct server
+6. Name conflicts with built-in skills are resolved by prefixing (`mcp_{server}_{tool}`)
+
+## Server Config Options
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Server identifier (used for logging and conflict prefixes) |
+| `command` | string | Command to launch the server |
+| `args` | list | Command-line arguments (optional) |
+| `env` | dict | Environment variables for the server process (optional) |
+
+## Example: SQLite Database Access
+
+```yaml
+mcp_servers:
+  - name: db
+    command: mcp-server-sqlite
+    args: ["--db", "/data/mydb.sqlite"]
+```
+
+Once configured, the agent can query the database using natural language — the MCP server translates tool calls into SQL queries.
+
+## Example: Filesystem Access
+
+```yaml
+mcp_servers:
+  - name: fs
+    command: mcp-server-filesystem
+    args: ["/data/workspace"]
+```
+
+This gives the agent structured file operations beyond the built-in file tools, such as directory tree listing and file metadata.
