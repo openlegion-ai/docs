@@ -54,4 +54,4 @@ Found an error or something missing? Issues and pull requests welcome.
 
 ## License
 
-MIT
+AGPLv3
