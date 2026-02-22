@@ -45,7 +45,7 @@ Task mode is used for workflow steps where an agent is given a specific objectiv
 
 Accepts a user message. On the first message, loads workspace context (AGENTS.md, SOUL.md, USER.md, MEMORY.md) into the system prompt and searches memory for relevant facts. Executes tool calls in a bounded loop (max 30 rounds) and runs context compaction when needed.
 
-Chat mode is used for interactive conversations via CLI, Telegram, or Discord.
+Chat mode is used for interactive conversations via CLI, Telegram, Discord, Slack, or WhatsApp.
 
 ## Self-Extending Skills
 
@@ -67,6 +67,9 @@ async def your_tool(param1: str, *, mesh_client=None) -> dict:
 
 Agents track tool failures in `learnings/errors.md` and user corrections in `learnings/corrections.md`. These are automatically injected into the system prompt each session, so agents avoid repeating past mistakes.
 
-## Sub-Agents
+## Agent Spawning
 
-Agents can spawn ephemeral sub-agents using the `spawn_agent` tool for specialized work. Sub-agents inherit the parent's mesh connection but run independently.
+Agents have two ways to spawn helpers:
+
+- **`spawn_agent`** — Creates a fully isolated container agent via the mesh host. Useful for tasks that need their own tools, memory, and security boundary.
+- **`spawn_subagent`** — Creates a lightweight in-process sub-agent. Faster startup but shares the parent's process. Sub-agents cannot spawn further sub-agents.

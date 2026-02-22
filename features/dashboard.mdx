@@ -1,0 +1,47 @@
+---
+title: "Dashboard"
+description: "Real-time web UI for monitoring and managing your agent fleet"
+icon: "gauge"
+---
+
+OpenLegion includes a built-in web dashboard for real-time monitoring, debugging, and management of your agent fleet. The dashboard is served by the mesh host and available at `http://localhost:8420/dashboard`.
+
+## Panels
+
+### Agents
+
+View all running agents with their health status, current model, token usage, and cost. Edit agent configuration and budgets directly from the dashboard.
+
+### Activity & Traces
+
+Grouped request traces showing the full lifecycle of each agent interaction — including LLM prompts, responses, tool calls, and timing. Useful for debugging agent behavior.
+
+### Live Events
+
+WebSocket-streamed event feed showing real-time activity across the fleet. Filter by event type (task assignments, pub/sub events, blackboard updates, etc.).
+
+### Blackboard
+
+Browse, search, write, and delete entries in the shared blackboard. See the current state of inter-agent shared data.
+
+### Costs
+
+Per-agent spending breakdown with period selector (today, this week, this month). Budget bars show how much of each agent's allocation has been used.
+
+### Automation
+
+Manage cron jobs and scheduled tasks. Run, pause, resume, edit, or delete automation from the UI.
+
+### System
+
+View configured credentials (names only — values are never exposed), pub/sub subscriptions, model pricing, and browser backend configuration.
+
+## Accessing the Dashboard
+
+The dashboard starts automatically with `openlegion start`. No additional configuration is needed.
+
+```
+http://localhost:8420/dashboard
+```
+
+The dashboard uses Alpine.js and Tailwind CSS, served as static assets from the mesh host. Real-time updates are streamed via WebSocket.

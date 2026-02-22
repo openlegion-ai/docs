@@ -5,7 +5,7 @@ description: "Install OpenLegion and launch your first agent fleet"
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.11+
 - Docker (running)
 - An LLM API key ([Anthropic](https://console.anthropic.com/) / [OpenAI](https://platform.openai.com/api-keys) / [Moonshot](https://platform.moonshot.cn/) / any of 100+ providers)
 
@@ -84,6 +84,8 @@ openlegion stop              # clean shutdown
 ```bash
 openlegion channels add telegram    # prompts for bot token from @BotFather
 openlegion channels add discord     # prompts for bot token
+openlegion channels add slack       # prompts for Slack bot token
+openlegion channels add whatsapp    # prompts for WhatsApp Cloud API credentials
 ```
 
 On next `openlegion start`, a pairing code appears — send it to your bot to link.

@@ -35,6 +35,7 @@
               "features/memory",
               "features/triggering",
               "features/channels",
+              "features/dashboard",
               "features/mcp",
               "features/cost-tracking"
             ]
@@ -62,6 +63,7 @@
   },
   "navbar": {
     "links": [
+      { "label": "Website", "href": "https://openlegion.ai" },
       { "label": "GitHub", "href": "https://github.com/openlegion-ai/openlegion" }
     ]
   },

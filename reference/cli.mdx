@@ -17,12 +17,18 @@ openlegion
 ├── agent
 │   ├── add [name]                       # Add a new agent
 │   ├── list                             # List configured agents
+│   ├── edit [name]                      # Edit agent settings
 │   └── remove <name> [--yes]            # Remove an agent
 │
-└── channels
-    ├── add [telegram|discord]           # Connect a messaging channel
-    ├── list                             # Show configured channels
-    └── remove <telegram|discord>        # Disconnect a channel
+├── channels
+│   ├── add [telegram|discord|slack|whatsapp]  # Connect a messaging channel
+│   ├── list                                   # Show configured channels
+│   └── remove <type>                          # Disconnect a channel
+│
+└── skill
+    ├── install <repo_url> [--ref TAG]         # Install skill from git repo
+    ├── list                                   # List installed marketplace skills
+    └── remove <name> [-y]                     # Remove a skill
 ```
 
 ## Command Details
@@ -68,6 +74,18 @@ Add a new agent. If no name is given, prompts interactively for agent configurat
 
 List all configured agents with their roles and models.
 
+### `openlegion agent edit [name]`
+
+Edit an agent's settings. If no name or flags are given, prompts interactively.
+
+| Flag | Description |
+|------|-------------|
+| `--model MODEL` | Set LLM model (e.g., `anthropic/claude-sonnet-4-6`) |
+| `--browser BACKEND` | Set browser backend (`basic`, `stealth`, or `advanced`) |
+| `--description TEXT` | Set role description |
+| `--system-prompt TEXT` | Set system prompt |
+| `--budget USD` | Set daily budget in USD |
+
 ### `openlegion agent remove <name>`
 
 Remove an agent from the configuration.
@@ -76,17 +94,37 @@ Remove an agent from the configuration.
 |------|-------------|
 | `--yes` | Skip confirmation prompt |
 
-### `openlegion channels add [telegram|discord]`
+### `openlegion channels add [telegram|discord|slack|whatsapp]`
 
-Connect a messaging channel. Prompts for the bot token.
+Connect a messaging channel. Prompts for the required credentials (bot token, API key, etc.).
 
 ### `openlegion channels list`
 
 Show all configured channels and their status.
 
-### `openlegion channels remove <telegram|discord>`
+### `openlegion channels remove <type>`
 
 Disconnect a channel.
+
+### `openlegion skill install <repo_url>`
+
+Install a skill from a git repository into the marketplace.
+
+| Flag | Description |
+|------|-------------|
+| `--ref TAG` | Install a specific version, tag, or branch |
+
+### `openlegion skill list`
+
+List all installed marketplace skills.
+
+### `openlegion skill remove <name>`
+
+Remove an installed marketplace skill.
+
+| Flag | Description |
+|------|-------------|
+| `-y` | Skip confirmation prompt |
 
 ## Interactive REPL Commands
 
@@ -100,7 +138,9 @@ When running `openlegion start`, you're in the interactive REPL:
 | `/add` | Add a new agent (hot-adds to running system) |
 | `/status` | Show agent health |
 | `/broadcast <msg>` | Send message to all agents |
-| `/costs` | Show today's LLM spend |
+| `/steer <msg>` | Inject message into a busy agent's context |
+| `/costs` | Show today's spend, context usage, and model health |
+| `/addkey <svc> [key]` | Add an API credential to the vault at runtime |
 | `/reset` | Clear conversation with active agent |
 | `/quit` | Exit and stop runtime |
 
