@@ -32,7 +32,7 @@ mint dev             # http://localhost:3000
 ├── quickstart.mdx           — Installation and setup guide
 ├── concepts/
 │   ├── architecture.mdx     — Trust zones, mesh host, containers
-│   └── security.mdx         — 5-layer defense model
+│   └── security.mdx         — 6-layer defense model
 ├── features/
 │   ├── agents.mdx           — Agent containers, task/chat modes
 │   ├── workflows.mdx        — Deterministic DAG orchestration

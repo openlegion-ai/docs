@@ -112,7 +112,7 @@ Every inter-agent operation is checked against per-agent ACLs:
 ### Container Manager
 
 Each agent runs in an isolated Docker container with:
-- **Image**: `openlegion-agent:latest` (Python 3.12, system tools, Playwright, Chromium)
+- **Image**: `openlegion-agent:latest` (Python 3.12, system tools, Playwright, Chromium, Camoufox)
 - **Network**: Bridge with port mapping (macOS/Windows) or host network (Linux)
 - **Volume**: `openlegion_data_{agent_id}` mounted at `/data`
 - **Resources**: 512MB RAM limit, 50% CPU quota
@@ -126,7 +126,7 @@ Each agent runs in an isolated Docker container with:
 | The mesh is the only door | No agent has network access except through the mesh. No agent holds credentials. |
 | Private by default, shared by promotion | Agents keep knowledge private. Facts are explicitly promoted to the blackboard. |
 | Explicit failure handling | Every workflow step declares what happens on failure. No silent error swallowing. |
-| Small enough to audit | ~17,000 total lines. The entire codebase is auditable in a day. |
+| Small enough to audit | ~19,000 total lines. The entire codebase is auditable in a day. |
 | Skills over features | New capabilities are agent skills, not mesh or orchestrator code. |
 | SQLite for all state | Single-file databases. No external services. WAL mode for concurrent reads. |
 | Zero vendor lock-in | LiteLLM supports 100+ providers. Markdown workspace files. No proprietary formats. |

@@ -1,12 +1,12 @@
 ---
 title: "Security Model"
-description: "Defense-in-depth with five layers of protection"
+description: "Defense-in-depth with six layers of protection"
 icon: "shield"
 ---
 
-OpenLegion was designed from day one assuming agents will be compromised. The security model provides defense-in-depth with five layers.
+OpenLegion was designed from day one assuming agents will be compromised. The security model provides defense-in-depth with six layers.
 
-## Five Security Layers
+## Six Security Layers
 
 | Layer | Mechanism | What It Prevents |
 |-------|-----------|-----------------|
@@ -15,6 +15,7 @@ OpenLegion was designed from day one assuming agents will be compromised. The se
 | Credential separation | Vault holds keys, agents call via proxy | Key leakage, unauthorized API use |
 | Permission enforcement | Per-agent ACLs for messaging, blackboard, pub/sub, APIs | Unauthorized data access |
 | Input validation | Path traversal prevention, safe condition eval (no `eval()`), token budgets, iteration limits | Injection, runaway loops |
+| Unicode sanitization | Invisible character stripping at three choke points (user input, tool results, system prompt context) | Prompt injection via hidden Unicode |
 
 ## Dual Runtime Backend
 
@@ -76,5 +77,5 @@ Permissions control:
 
 - **Path traversal prevention**: Agent file operations are confined to `/data` inside the container
 - **Safe condition evaluation**: Workflow conditions use a regex-based safe parser — never `eval()`
-- **Bounded execution**: Agent loops have hard limits (20 iterations for tasks, 10 tool rounds for chat)
+- **Bounded execution**: Agent loops have hard limits (20 iterations for tasks, 30 tool rounds for chat)
 - **Token budgets**: Per-task token limits prevent runaway LLM spend
