@@ -7,9 +7,9 @@ description: "Autonomous AI agent fleets — isolated, auditable, and production
 
 OpenLegion is an open-source framework for running autonomous AI agent fleets in isolated Docker containers. Every agent gets its own memory, tools, schedule, and budget — coordinated through deterministic YAML workflows with no LLM routing layer.
 
-API keys never leave the vault. Agents call through a proxy and never handle credentials directly. Chat with your fleet via **Telegram**, **Discord**, or CLI.
+API keys never leave the vault. Agents call through a proxy and never handle credentials directly. Chat with your fleet via **Telegram**, **Discord**, **Slack**, **WhatsApp**, or CLI. Monitor everything from a real-time web dashboard.
 
-**495 tests** across **~11,000 lines** of application code. Fully auditable in a day.
+**928 tests** across **~17,000 lines** of application code. Fully auditable in a day.
 No LangChain. No Redis. No Kubernetes. No CEO agent. MIT License.
 
 <Card title="Quick Start" icon="rocket" href="/quickstart" horizontal>
@@ -32,7 +32,7 @@ No LangChain. No Redis. No Kubernetes. No CEO agent. MIT License.
     Agents learn from tool failures and user corrections, injecting past learnings into future sessions. They write their own Python skills at runtime and hot-reload them.
   </Card>
   <Card title="Multi-Channel" icon="comments">
-    Connect agents to Telegram and Discord. Also accessible via CLI and API.
+    Connect agents to Telegram, Discord, Slack, and WhatsApp. Also accessible via CLI and API. Monitor via real-time web dashboard.
   </Card>
   <Card title="100+ LLM Providers" icon="plug">
     Configurable model failover chains cascade across LLM providers with per-model health tracking and exponential cooldown via LiteLLM.

@@ -1,16 +1,18 @@
 ---
 title: "Channels"
-description: "Connect agents to Telegram, Discord, and more"
+description: "Connect agents to Telegram, Discord, Slack, WhatsApp, and more"
 icon: "comments"
 ---
 
-Chat with your agent fleet via **Telegram**, **Discord**, or **CLI**. Channels provide a unified interface for interacting with agents from any platform.
+Chat with your agent fleet via **Telegram**, **Discord**, **Slack**, **WhatsApp**, or **CLI**. Channels provide a unified interface for interacting with agents from any platform.
 
 ## Connecting Channels
 
 ```bash
 openlegion channels add telegram    # prompts for bot token from @BotFather
 openlegion channels add discord     # prompts for bot token
+openlegion channels add slack       # prompts for Slack bot token (Socket Mode)
+openlegion channels add whatsapp    # prompts for WhatsApp Cloud API credentials
 openlegion channels list            # check what's connected
 openlegion channels remove telegram # disconnect
 ```
@@ -24,6 +26,8 @@ On next `openlegion start`, a pairing code appears — send it to your bot to li
 | **CLI REPL** | Built-in | `@agent` mentions, `/commands`, broadcast |
 | **Telegram** | Bot token from @BotFather | Per-user agent routing, chunked messages |
 | **Discord** | Bot token from Discord Developer Portal | Per-user agent routing, chunked messages |
+| **Slack** | Bot token (Socket Mode — no webhooks needed) | Per-user agent routing, chunked messages |
+| **WhatsApp** | Access token + phone number ID from WhatsApp Cloud API | Per-user agent routing, chunked messages |
 
 ## How Channels Work
 
@@ -32,6 +36,34 @@ All channels share a common base class that provides:
 - **Slash commands**: `/use`, `/agents`, `/status`, `/costs`, `/reset`, `/broadcast`
 - **Per-user routing**: Each user's messages route to their selected agent
 - **Message chunking**: Long responses are automatically split for platform limits
+
+## Channel Configuration
+
+Channels are configured in `config/mesh.yaml`:
+
+```yaml
+channels:
+  telegram:
+    enabled: true
+    default_agent: assistant
+  discord:
+    enabled: false
+    default_agent: assistant
+  slack:
+    enabled: false
+  whatsapp:
+    enabled: false
+```
+
+API tokens are stored as environment variables:
+
+```bash
+OPENLEGION_CRED_TELEGRAM_BOT_TOKEN=123456:ABC...
+OPENLEGION_CRED_DISCORD_BOT_TOKEN=MTIz...
+OPENLEGION_CRED_SLACK_BOT_TOKEN=xoxb-...
+OPENLEGION_CRED_WHATSAPP_ACCESS_TOKEN=EAAx...
+OPENLEGION_CRED_WHATSAPP_PHONE_NUMBER_ID=1234...
+```
 
 ## Channel Commands
 

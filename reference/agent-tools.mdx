@@ -37,7 +37,21 @@ Every agent has access to these built-in tools. Agents can also [create custom s
 | `browser_type` | Fill input by ref or CSS selector |
 | `browser_evaluate` | Run JavaScript in page |
 
-Browser tools use Playwright with Chromium, pre-installed in the agent container image.
+Browser tools are pre-installed in the agent container image. Three backends are available:
+
+| Backend | Config Value | Description |
+|---------|-------------|-------------|
+| **Basic** | `basic` (default) | Standard Playwright Chromium |
+| **Stealth** | `stealth` | Camoufox anti-detect browser (automatic fingerprint rotation) |
+| **Advanced** | `advanced` | Bright Data Scraping Browser via CDP (residential proxies, CAPTCHA solving) |
+
+Configure per-agent in `config/agents.yaml`:
+
+```yaml
+agents:
+  scraper:
+    browser_backend: advanced
+```
 
 ## Memory
 
@@ -59,6 +73,7 @@ See the [Memory System](/features/memory) for details on the 5-layer memory arch
 
 | Tool | Purpose |
 |------|---------|
+| `notify_user` | Send a notification to the user (via active channel) |
 | `list_agents` | Discover other agents in the fleet |
 | `read_agent_history` | Read another agent's conversation logs |
 
@@ -93,8 +108,21 @@ See [Triggering & Automation](/features/triggering) for details.
 | `list_custom_skills` | List all custom skills the agent has created |
 | `reload_skills` | Hot-reload all skills |
 
-## Sub-Agents
+## Agent Spawning
 
 | Tool | Purpose |
 |------|---------|
-| `spawn_agent` | Spawn an ephemeral sub-agent for specialized work |
+| `spawn_agent` | Spawn a new ephemeral agent in its own container via the mesh |
+| `spawn_subagent` | Spawn a lightweight in-process sub-agent (no container overhead) |
+| `list_subagents` | List active in-process sub-agents spawned by this agent |
+
+`spawn_agent` creates a fully isolated container agent via the mesh host. `spawn_subagent` creates a lightweight in-process helper — faster but shares the parent's process. Sub-agents cannot spawn further sub-agents.
+
+## Credential Vault
+
+| Tool | Purpose |
+|------|---------|
+| `vault_generate_secret` | Generate a secure random secret |
+| `vault_capture_from_page` | Capture credentials from a browser page |
+| `vault_list` | List available credentials in the vault |
+| `vault_status` | Check vault health and credential status |
