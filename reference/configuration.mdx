@@ -62,6 +62,8 @@ agents:
     model: "openai/gpt-4o-mini"
     skills_dir: "./skills/research"
     system_prompt: "You are a research specialist..."
+    browser_backend: "stealth"          # basic (default), stealth, or advanced
+    thinking: "medium"                   # off (default), low, medium, or high
     resources:
       memory_limit: "512m"
       cpu_limit: 0.5
@@ -83,6 +85,7 @@ agents:
 | `budget.daily_usd` | float | Daily LLM spend cap |
 | `budget.monthly_usd` | float | Monthly LLM spend cap |
 | `browser_backend` | string | Browser tier: `basic` (default), `stealth`, or `advanced` |
+| `thinking` | string | Extended thinking: `off` (default), `low`, `medium`, or `high` |
 | `mcp_servers` | list | [MCP tool servers](/features/mcp) |
 
 ## `config/permissions.json` — Agent Permissions
@@ -131,6 +134,7 @@ OPENLEGION_CRED_BRAVE_SEARCH_API_KEY=BSA...
 OPENLEGION_CRED_TELEGRAM_BOT_TOKEN=123456:ABC...
 OPENLEGION_CRED_DISCORD_BOT_TOKEN=MTIz...
 OPENLEGION_CRED_SLACK_BOT_TOKEN=xoxb-...
+OPENLEGION_CRED_SLACK_APP_TOKEN=xapp-...
 OPENLEGION_CRED_WHATSAPP_ACCESS_TOKEN=EAAx...
 OPENLEGION_CRED_WHATSAPP_PHONE_NUMBER_ID=1234...
 

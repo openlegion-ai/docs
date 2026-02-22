@@ -136,10 +136,17 @@ When running `openlegion start`, you're in the interactive REPL:
 | `/use <agent>` | Switch active agent |
 | `/agents` | List all running agents |
 | `/add` | Add a new agent (hot-adds to running system) |
+| `/edit [name]` | Edit agent settings (model, browser, budget) |
+| `/remove [name]` | Remove an agent |
 | `/status` | Show agent health |
 | `/broadcast <msg>` | Send message to all agents |
 | `/steer <msg>` | Inject message into a busy agent's context |
 | `/costs` | Show today's spend, context usage, and model health |
+| `/blackboard [cmd]` | View/edit shared blackboard entries |
+| `/queue` | Show agent task queue status |
+| `/workflow [cmd]` | List or trigger workflows |
+| `/cron [cmd]` | Manage cron jobs (list, add, pause, resume, run, remove) |
+| `/debug [trace]` | Show recent request traces |
 | `/addkey <svc> [key]` | Add an API credential to the vault at runtime |
 | `/reset` | Clear conversation with active agent |
 | `/quit` | Exit and stop runtime |
