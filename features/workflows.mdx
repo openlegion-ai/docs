@@ -34,7 +34,7 @@ Steps declare which other steps they depend on via `depends_on`. The orchestrato
 
 Step conditions use a safe expression evaluator (no `eval()`) to check results from previous steps. A step only executes if its condition evaluates to true.
 
-Supported operators: `>=`, `<=`, `>`, `<`, `==`, `!=`, `and`, `or`, `not`.
+Supported operators: `>=`, `<=`, `>`, `<`, `==`, `!=`. Each condition is a single comparison — boolean operators (`and`, `or`, `not`) are not supported.
 
 ## Retries and Failure Handlers
 
