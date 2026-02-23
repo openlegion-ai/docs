@@ -30,13 +30,13 @@ mesh:
   port: 8420
 
 llm:
-  default_model: "openai/gpt-4o-mini"
+  default_model: "openai/gpt-4.1-mini"
   embedding_model: "text-embedding-3-small"
   max_tokens: 4096
   temperature: 0.7
   failover:
     primary: "anthropic/claude-sonnet-4-6"
-    fallback: "openai/gpt-4o-mini"
+    fallback: "openai/gpt-4.1-mini"
 
 channels:
   telegram:
@@ -59,7 +59,7 @@ Created automatically by `openlegion setup` or `openlegion agent add`.
 agents:
   researcher:
     role: "research"
-    model: "openai/gpt-4o-mini"
+    model: "openai/gpt-4.1-mini"
     skills_dir: "./skills/research"
     system_prompt: "You are a research specialist..."
     browser_backend: "stealth"          # basic (default), stealth, or advanced
@@ -77,7 +77,7 @@ agents:
 | Field | Type | Description |
 |-------|------|-------------|
 | `role` | string | Agent's role identifier |
-| `model` | string | LLM model in LiteLLM format (e.g., `openai/gpt-4o-mini`, `anthropic/claude-sonnet-4-20250514`) |
+| `model` | string | LLM model in LiteLLM format (e.g., `openai/gpt-4.1-mini`, `anthropic/claude-sonnet-4-6`) |
 | `skills_dir` | string | Path to custom skills directory |
 | `system_prompt` | string | Agent's system prompt |
 | `resources.memory_limit` | string | Container memory limit (default: `512m`) |

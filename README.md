@@ -13,7 +13,7 @@ Powered by [Mintlify](https://mintlify.com).
 - **Getting Started** — Overview, quickstart guide
 - **Concepts** — Architecture, security model
 - **Features** — Agents, workflows, memory, triggering, channels, dashboard, MCP, cost tracking
-- **Reference** — CLI commands, configuration, all 37 built-in agent tools
+- **Reference** — CLI commands, configuration, all 38 built-in agent tools
 
 ## Development
 
@@ -45,7 +45,7 @@ mint dev             # http://localhost:3000
 └── reference/
     ├── cli.mdx              — CLI and REPL command reference
     ├── configuration.mdx    — Config files and environment variables
-    └── agent-tools.mdx      — All 37 built-in tools
+    └── agent-tools.mdx      — All 38 built-in tools
 ```
 
 ## Contributing
