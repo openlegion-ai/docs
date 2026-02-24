@@ -32,18 +32,20 @@ First install downloads ~70 packages and takes 2-3 minutes. Subsequent installs 
 </Note>
 </Step>
 
-<Step title="Run guided setup">
+<Step title="Start your fleet">
 
 ```bash
-openlegion setup
+openlegion start                 # inline setup on first run, then launch agents
 ```
 
-The setup wizard walks you through:
-- Entering your LLM API key
-- Describing your project (loaded into every agent's system prompt)
-- Choosing a team template
+On first run (no credentials configured), `openlegion start` detects this and offers three paths:
+1. **Quick setup here** — pick a provider, paste your API key (validated), choose a model, then optionally create your first agent
+2. **Open the dashboard** — configure everything via the web UI at `/dashboard`
+3. **Skip** — start the runtime and use `/addkey` later in the REPL
 
-**Team Templates:**
+After setup, it launches the mesh host, spins up agent containers, and drops you into the interactive REPL. Start chatting with your agents immediately.
+
+**Team Templates** (offered during first-run setup):
 
 | Template | Agents | Use Case |
 |----------|--------|----------|
@@ -52,15 +54,6 @@ The setup wizard walks you through:
 | `devteam` | pm, engineer, reviewer | Software development |
 | `content` | researcher, writer, editor | Content creation |
 
-</Step>
-
-<Step title="Start your fleet">
-
-```bash
-openlegion start
-```
-
-This launches the mesh host, spins up agent containers, and drops you into the interactive REPL. Start chatting with your agents immediately.
 </Step>
 </Steps>
 

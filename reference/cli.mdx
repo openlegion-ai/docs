@@ -7,42 +7,34 @@ icon: "terminal"
 ## CLI Commands
 
 ```
-openlegion
-├── setup                                # Guided setup wizard
-├── start [--config PATH] [-d] [--sandbox]  # Start runtime + interactive REPL
+openlegion [--version]
+├── start [--config PATH] [-d] [--sandbox]  # Start runtime + interactive REPL (inline setup on first run)
 ├── stop                                 # Stop all containers
 ├── chat <name> [--port PORT]            # Connect to a running agent
 ├── status [--port PORT]                 # Show agent status
 │
 ├── agent
 │   ├── add [name]                       # Add a new agent
+│   ├── edit <name>                      # Edit agent settings (model, browser, budget)
 │   ├── list                             # List configured agents
-│   ├── edit [name]                      # Edit agent settings
 │   └── remove <name> [--yes]            # Remove an agent
 │
-├── channels
-│   ├── add [telegram|discord|slack|whatsapp]  # Connect a messaging channel
-│   ├── list                                   # Show configured channels
-│   └── remove <type>                          # Disconnect a channel
+├── skill
+│   ├── install <repo_url> [--ref TAG]         # Install skill from git repo
+│   ├── list                                   # List installed marketplace skills
+│   └── remove <name> [--yes]                  # Remove an installed skill
 │
-└── skill
-    ├── install <repo_url> [--ref TAG]         # Install skill from git repo
-    ├── list                                   # List installed marketplace skills
-    └── remove <name> [-y]                     # Remove a skill
+└── channels
+    ├── add [telegram|discord|slack|whatsapp]  # Connect a messaging channel
+    ├── list                                    # Show configured channels
+    └── remove <name>                           # Disconnect a channel
 ```
 
 ## Command Details
 
-### `openlegion setup`
-
-Guided setup wizard that walks you through:
-- Entering your LLM API key
-- Describing your project
-- Choosing a team template (starter, sales, devteam, content)
-
 ### `openlegion start`
 
-Launches the mesh host, spins up agent containers, and starts the interactive REPL.
+Launches the mesh host, spins up agent containers, and starts the interactive REPL. On first run (no credentials configured), runs inline setup — API key entry, model selection, and optional agent creation — right in the terminal.
 
 | Flag | Description |
 |------|-------------|
@@ -74,9 +66,9 @@ Add a new agent. If no name is given, prompts interactively for agent configurat
 
 List all configured agents with their roles and models.
 
-### `openlegion agent edit [name]`
+### `openlegion agent edit <name>`
 
-Edit an agent's settings. If no name or flags are given, prompts interactively.
+Edit an agent's settings (model, browser backend, budget). If no flags are given, prompts interactively.
 
 | Flag | Description |
 |------|-------------|
@@ -153,7 +145,7 @@ When running `openlegion start`, you're in the interactive REPL:
 
 ## Team Templates
 
-Templates offered during `openlegion setup`:
+Templates offered during first-run setup (via `openlegion start`):
 
 | Template | Agents | Description |
 |----------|--------|-------------|
