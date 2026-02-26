@@ -53,9 +53,14 @@ Run `docker sandbox version` to check compatibility. If it returns a version num
 
 ## Credential Vault
 
-Agents never hold API keys. The credential vault:
+Agents never hold API keys. The credential vault uses a two-tier prefix system:
 
-1. Loads credentials from `OPENLEGION_CRED_*` environment variables
+- **`OPENLEGION_SYSTEM_*`** — LLM provider keys (never agent-accessible)
+- **`OPENLEGION_CRED_*`** — Agent-tier tool/service keys (access controlled per-agent)
+
+How it works:
+
+1. The vault loads credentials from both `OPENLEGION_SYSTEM_*` and `OPENLEGION_CRED_*` environment variables
 2. Agents make API calls through the mesh proxy endpoint (`/mesh/api`)
 3. The vault injects credentials server-side before forwarding to the provider
 4. Budget limits are checked before dispatching LLM calls

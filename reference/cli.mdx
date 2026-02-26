@@ -73,7 +73,7 @@ Edit an agent's settings (model, browser backend, budget). If no flags are given
 | Flag | Description |
 |------|-------------|
 | `--model MODEL` | Set LLM model (e.g., `anthropic/claude-sonnet-4-6`) |
-| `--browser BACKEND` | Set browser backend (`basic`, `stealth`, or `advanced`) |
+| `--browser BACKEND` | Set browser backend (`basic`, `stealth`, `advanced`, or `persistent`) |
 | `--description TEXT` | Set role description |
 | `--system-prompt TEXT` | Set system prompt |
 | `--budget USD` | Set daily budget in USD |
@@ -140,8 +140,11 @@ When running `openlegion start`, you're in the interactive REPL:
 | `/cron [cmd]` | Manage cron jobs (list, add, pause, resume, run, remove) |
 | `/debug [trace]` | Show recent request traces |
 | `/addkey <svc> [key]` | Add an API credential to the vault at runtime |
+| `/removekey [name]` | Remove a credential from the vault |
 | `/reset` | Clear conversation with active agent |
 | `/quit` | Exit and stop runtime |
+
+**Aliases:** `/exit` = `/quit`, `/agents` = `/status`
 
 ## Team Templates
 

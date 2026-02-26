@@ -45,7 +45,7 @@ Task mode is used for workflow steps where an agent is given a specific objectiv
 
 ## Chat Mode
 
-Accepts a user message. On the first message, loads workspace context (AGENTS.md, SOUL.md, USER.md, MEMORY.md) into the system prompt and searches memory for relevant facts. Executes tool calls in a bounded loop (max 30 rounds) and runs context compaction when needed.
+Accepts a user message. On the first message, loads workspace context (AGENTS.md, SOUL.md, USER.md, MEMORY.md, SYSTEM.md) into the system prompt, injects a live Runtime Context block (permissions, budget, fleet, cron), and searches memory for relevant facts. Executes tool calls in a bounded loop (max 30 rounds) and runs context compaction when needed.
 
 Chat mode is used for interactive conversations via CLI, Telegram, Discord, Slack, or WhatsApp.
 
@@ -68,6 +68,18 @@ async def your_tool(param1: str, *, mesh_client=None) -> dict:
 ## Self-Improving via Learnings
 
 Agents track tool failures in `learnings/errors.md` and user corrections in `learnings/corrections.md`. These are automatically injected into the system prompt each session, so agents avoid repeating past mistakes.
+
+## Tool Loop Detection
+
+Both task and chat modes include automatic detection of stuck tool-call loops. A sliding window tracks recent `(tool_name, params_hash, result_hash)` tuples and escalates through three levels:
+
+| Level | Trigger | Action |
+|-------|---------|--------|
+| **Warn** | 3rd identical call | System message: "Try a different approach" |
+| **Block** | 5th identical call | Tool skipped, error returned to agent |
+| **Terminate** | 10th call with same params | Loop terminated with failure status |
+
+Memory retrieval tools (`memory_search`, `memory_recall`) are exempt since repeated searches are legitimate.
 
 ## Agent Spawning
 

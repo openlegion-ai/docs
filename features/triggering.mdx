@@ -27,6 +27,8 @@ This 5-stage architecture makes always-on agents economically viable:
 4. **Escalation** — dispatches to the agent only when needed
 5. **Action** — agent processes the alert with full LLM capabilities
 
+When a heartbeat fires, the agent receives enriched context: its HEARTBEAT.md rules, recent daily logs, probe alerts, and actual pending signal/task content — all in a single message. If HEARTBEAT.md is the default scaffold, no recent activity exists, and no probes triggered, the dispatch is skipped entirely (zero LLM cost).
+
 ## Webhook Endpoints
 
 Named webhook URLs that dispatch payloads to agents:
