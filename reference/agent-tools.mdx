@@ -4,7 +4,7 @@ description: "All built-in tools available to agents"
 icon: "toolbox"
 ---
 
-Every agent has access to these built-in tools. Agents can also [create custom skills](/features/agents#self-extending-skills) at runtime and use [MCP tool servers](/features/mcp).
+Every agent has access to 40 built-in tools. Agents can also [create custom skills](/features/agents#self-extending-skills) at runtime and use [MCP tool servers](/features/mcp).
 
 ## Execution
 
@@ -36,14 +36,16 @@ Every agent has access to these built-in tools. Agents can also [create custom s
 | `browser_click` | Click element by ref or CSS selector |
 | `browser_type` | Fill input by ref or CSS selector |
 | `browser_evaluate` | Run JavaScript in page |
+| `browser_reset` | Force-close browser and reconnect fresh (new IP for Bright Data) |
 
-Browser tools are pre-installed in the agent container image. Three backends are available:
+Browser tools are pre-installed in the agent container image. Four backends are available:
 
 | Backend | Config Value | Description |
 |---------|-------------|-------------|
 | **Basic** | `basic` (default) | Standard Playwright Chromium |
 | **Stealth** | `stealth` | Camoufox anti-detect browser (automatic fingerprint rotation) |
 | **Advanced** | `advanced` | Bright Data Scraping Browser via CDP (residential proxies, CAPTCHA solving) |
+| **Persistent** | `persistent` | KasmVNC-based persistent browser with visual monitoring from the dashboard |
 
 Configure per-agent in `config/agents.yaml`:
 
@@ -76,6 +78,18 @@ See the [Memory System](/features/memory) for details on the 5-layer memory arch
 | `notify_user` | Send a notification to the user (via active channel) |
 | `list_agents` | Discover other agents in the fleet |
 | `read_agent_history` | Read another agent's conversation logs |
+
+## Workspace
+
+| Tool | Purpose |
+|------|---------|
+| `update_workspace` | Update identity files (HEARTBEAT.md, USER.md) |
+
+## Introspection
+
+| Tool | Purpose |
+|------|---------|
+| `introspect` | Query own runtime state: permissions, budget, fleet, cron, health |
 
 ## Shared State (Blackboard)
 

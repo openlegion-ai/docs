@@ -62,7 +62,7 @@ agents:
     model: "openai/gpt-4.1-mini"
     skills_dir: "./skills/research"
     system_prompt: "You are a research specialist..."
-    browser_backend: "stealth"          # basic (default), stealth, or advanced
+    browser_backend: "stealth"          # basic (default), stealth, advanced, or persistent
     thinking: "medium"                   # off (default), low, medium, or high
     resources:
       memory_limit: "512m"
@@ -84,7 +84,7 @@ agents:
 | `resources.cpu_limit` | float | CPU quota (default: `0.5`) |
 | `budget.daily_usd` | float | Daily LLM spend cap |
 | `budget.monthly_usd` | float | Monthly LLM spend cap |
-| `browser_backend` | string | Browser tier: `basic` (default), `stealth`, or `advanced` |
+| `browser_backend` | string | Browser tier: `basic` (default), `stealth`, `advanced`, or `persistent` |
 | `thinking` | string | Extended thinking: `off` (default), `low`, `medium`, or `high` |
 | `mcp_servers` | list | [MCP tool servers](/features/mcp) |
 
@@ -100,7 +100,8 @@ Per-agent access control with glob patterns for blackboard paths and explicit al
     "can_subscribe": ["new_lead"],
     "blackboard_read": ["tasks/*", "context/*"],
     "blackboard_write": ["context/prospect_*"],
-    "allowed_apis": ["llm", "brave_search"]
+    "allowed_apis": ["llm", "brave_search"],
+    "allowed_credentials": ["brightdata_*"]
   }
 }
 ```
@@ -115,6 +116,7 @@ Per-agent access control with glob patterns for blackboard paths and explicit al
 | `blackboard_read` | list | Glob patterns for readable blackboard keys |
 | `blackboard_write` | list | Glob patterns for writable blackboard keys |
 | `allowed_apis` | list | External APIs accessible through the vault |
+| `allowed_credentials` | list | Glob patterns for agent-tier credentials accessible to this agent |
 
 Default policy is **deny** — agents can only do what's explicitly permitted.
 
@@ -124,13 +126,18 @@ See [Workflows](/features/workflows) for the full specification.
 
 ## `.env` — API Keys
 
-Managed automatically by `openlegion start` and `openlegion channels add`. Can also be edited directly:
+Managed automatically by `openlegion start` and `openlegion channels add`. Can also be edited directly. Uses a two-tier prefix system:
 
 ```bash
-OPENLEGION_CRED_ANTHROPIC_API_KEY=sk-ant-...
-OPENLEGION_CRED_MOONSHOT_API_KEY=sk-...
-OPENLEGION_CRED_OPENAI_API_KEY=sk-...
+# System tier — LLM provider keys (never accessible by agents)
+OPENLEGION_SYSTEM_ANTHROPIC_API_KEY=sk-ant-...
+OPENLEGION_SYSTEM_OPENAI_API_KEY=sk-...
+OPENLEGION_SYSTEM_MOONSHOT_API_KEY=sk-...
+
+# Agent tier — tool/service keys (access controlled per-agent)
 OPENLEGION_CRED_BRAVE_SEARCH_API_KEY=BSA...
+
+# Channel tokens
 OPENLEGION_CRED_TELEGRAM_BOT_TOKEN=123456:ABC...
 OPENLEGION_CRED_DISCORD_BOT_TOKEN=MTIz...
 OPENLEGION_CRED_SLACK_BOT_TOKEN=xoxb-...
@@ -142,7 +149,7 @@ OPENLEGION_CRED_WHATSAPP_PHONE_NUMBER_ID=1234...
 OPENLEGION_LOG_FORMAT=text
 ```
 
-All `OPENLEGION_CRED_*` variables are loaded by the credential vault and never exposed to agent containers.
+`OPENLEGION_SYSTEM_*` keys are used exclusively for LLM provider calls and are never accessible to agents. `OPENLEGION_CRED_*` keys are agent-tier — access is controlled per-agent via the `allowed_credentials` field in permissions. Neither tier is ever exposed to agent containers directly.
 
 ## Project Structure
 

@@ -10,15 +10,19 @@ OpenLegion includes a built-in web dashboard for real-time monitoring, debugging
 
 ### Agents
 
-View all running agents with their health status, current model, token usage, and cost. Edit agent configuration and budgets directly from the dashboard.
+View all running agents with their health status, current model, token usage, and cost. Edit agent configuration and budgets directly from the dashboard. Agent identity editor lets you modify personality, instructions, preferences, heartbeat rules, memory, activity logs, and learnings.
 
 ### Activity & Traces
 
-Grouped request traces showing the full lifecycle of each agent interaction — including LLM prompts, responses, tool calls, and timing. Useful for debugging agent behavior.
+Grouped request traces showing the full lifecycle of each agent interaction — including LLM prompts, responses, tool calls, and timing. LLM prompt/response previews for quick debugging.
 
 ### Live Events
 
-WebSocket-streamed event feed showing real-time activity across the fleet. Filter by event type (task assignments, pub/sub events, blackboard updates, etc.).
+WebSocket-streamed event feed showing real-time activity across the fleet. Filter by event type (task assignments, pub/sub events, blackboard updates, etc.). Streaming broadcast with real-time per-agent responses.
+
+### Slide-Over Chat Panels
+
+Chat with any agent directly from the dashboard via slide-over panels — no need to switch to the CLI or a messaging channel.
 
 ### Blackboard
 
@@ -32,9 +36,17 @@ Per-agent spending breakdown with period selector (today, this week, this month)
 
 Manage cron jobs and scheduled tasks. Run, pause, resume, edit, or delete automation from the UI.
 
+### Browser Viewer
+
+Embedded KasmVNC viewer for agents using the `persistent` browser backend — watch agent browser sessions in real time from the dashboard.
+
 ### System
 
 View configured credentials (names only — values are never exposed), pub/sub subscriptions, model pricing, and browser backend configuration.
+
+### Keyboard Command Palette
+
+Quick access to dashboard actions via a keyboard command palette for power users.
 
 ## Accessing the Dashboard
 

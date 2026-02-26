@@ -86,7 +86,7 @@ SQLite-backed key-value store with versioning, TTL, and garbage collection.
 
 ### Credential Vault (API Proxy)
 
-Agents never hold API keys. All external API calls route through the mesh. The vault loads credentials from `OPENLEGION_CRED_*` environment variables and supports multiple providers. Budget limits are enforced before dispatching LLM calls and token usage is recorded after each response.
+Agents never hold API keys. All external API calls route through the mesh. The vault uses a two-tier prefix system: `OPENLEGION_SYSTEM_*` for LLM provider keys (never agent-accessible) and `OPENLEGION_CRED_*` for agent-tier tool/service keys. Budget limits are enforced before dispatching LLM calls and token usage is recorded after each response.
 
 ### Model Failover
 
@@ -104,7 +104,8 @@ Every inter-agent operation is checked against per-agent ACLs:
     "can_subscribe": ["new_lead"],
     "blackboard_read": ["tasks/*", "context/*"],
     "blackboard_write": ["context/prospect_*"],
-    "allowed_apis": ["llm", "brave_search"]
+    "allowed_apis": ["llm", "brave_search"],
+    "allowed_credentials": ["brightdata_*"]
   }
 }
 ```
@@ -112,11 +113,12 @@ Every inter-agent operation is checked against per-agent ACLs:
 ### Container Manager
 
 Each agent runs in an isolated Docker container with:
-- **Image**: `openlegion-agent:latest` (Python 3.12, system tools, Playwright, Chromium, Camoufox)
+- **Image**: `openlegion-agent:latest` (Python 3.12, system tools, Playwright, Chromium, Camoufox, KasmVNC)
 - **Network**: Bridge with port mapping (macOS/Windows) or host network (Linux)
-- **Volume**: `openlegion_data_{agent_id}` mounted at `/data`
+- **Volume**: `openlegion_data_{agent_id}` mounted at `/data` (agent names with spaces/special chars are sanitized)
 - **Resources**: 512MB RAM limit, 50% CPU quota
 - **Security**: `no-new-privileges`, runs as non-root `agent` user (UID 1000)
+- **Ports**: 8400 (FastAPI), 6080 (KasmVNC for persistent browser)
 
 ## Design Principles
 
@@ -126,7 +128,7 @@ Each agent runs in an isolated Docker container with:
 | The mesh is the only door | No agent has network access except through the mesh. No agent holds credentials. |
 | Private by default, shared by promotion | Agents keep knowledge private. Facts are explicitly promoted to the blackboard. |
 | Explicit failure handling | Every workflow step declares what happens on failure. No silent error swallowing. |
-| Small enough to audit | ~19,000 total lines. The entire codebase is auditable in a day. |
+| Small enough to audit | ~21,000 total lines. The entire codebase is auditable in a day. |
 | Skills over features | New capabilities are agent skills, not mesh or orchestrator code. |
 | SQLite for all state | Single-file databases. No external services. WAL mode for concurrent reads. |
 | Zero vendor lock-in | LiteLLM supports 100+ providers. Markdown workspace files. No proprietary formats. |
