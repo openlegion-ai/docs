@@ -62,11 +62,10 @@ agents:
     model: "openai/gpt-4.1-mini"
     skills_dir: "./skills/research"
     system_prompt: "You are a research specialist..."
-    browser_backend: "stealth"          # basic (default), stealth, advanced, or persistent
     thinking: "medium"                   # off (default), low, medium, or high
     resources:
-      memory_limit: "512m"
-      cpu_limit: 0.5
+      memory_limit: "1g"
+      cpu_limit: 1.0
     budget:
       daily_usd: 5.00
       monthly_usd: 100.00
@@ -80,11 +79,10 @@ agents:
 | `model` | string | LLM model in LiteLLM format (e.g., `openai/gpt-4.1-mini`, `anthropic/claude-sonnet-4-6`) |
 | `skills_dir` | string | Path to custom skills directory |
 | `system_prompt` | string | Agent's system prompt |
-| `resources.memory_limit` | string | Container memory limit (default: `512m`) |
-| `resources.cpu_limit` | float | CPU quota (default: `0.5`) |
+| `resources.memory_limit` | string | Container memory limit (default: `1g`) |
+| `resources.cpu_limit` | float | CPU quota (default: `1.0`) |
 | `budget.daily_usd` | float | Daily LLM spend cap |
 | `budget.monthly_usd` | float | Monthly LLM spend cap |
-| `browser_backend` | string | Browser tier: `basic` (default), `stealth`, `advanced`, or `persistent` |
 | `thinking` | string | Extended thinking: `off` (default), `low`, `medium`, or `high` |
 | `mcp_servers` | list | [MCP tool servers](/features/mcp) |
 
