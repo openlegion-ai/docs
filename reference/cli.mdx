@@ -17,7 +17,35 @@ openlegion [--version]
 │   ├── add [name]                       # Add a new agent
 │   ├── edit <name>                      # Edit agent settings (model, browser, budget)
 │   ├── list                             # List configured agents
-│   └── remove <name> [--yes]            # Remove an agent
+│   ├── remove <name> [--yes]            # Remove an agent
+│   └── restart <name>                   # Restart a running agent
+│
+├── credential
+│   ├── add <name> [value]               # Add an API credential to the vault
+│   ├── list                             # List configured credentials
+│   └── remove <name>                    # Remove a credential
+│
+├── project
+│   ├── create <name>                    # Create a new project
+│   ├── list                             # List all projects
+│   ├── delete <name>                    # Delete a project
+│   ├── add-agent <project> <agent>      # Add agent to project
+│   ├── remove-agent <project> <agent>   # Remove agent from project
+│   └── edit <name>                      # Edit project settings
+│
+├── webhook
+│   ├── list                             # List configured webhooks
+│   ├── add <name>                       # Add a webhook endpoint
+│   ├── remove <name>                    # Remove a webhook
+│   └── test <name> [--payload JSON]     # Send a test payload
+│
+├── config
+│   ├── show [--json]                    # Show effective configuration
+│   ├── validate                         # Check config for errors
+│   └── path                             # Show config file paths
+│
+├── health                               # Pre-flight dependency checks
+├── logs [-f] [--level LEVEL]            # View runtime logs
 │
 ├── skill
 │   ├── install <repo_url> [--ref TAG]         # Install skill from git repo
@@ -68,12 +96,11 @@ List all configured agents with their roles and models.
 
 ### `openlegion agent edit <name>`
 
-Edit an agent's settings (model, browser backend, budget). If no flags are given, prompts interactively.
+Edit an agent's settings (model, budget, etc.). If no flags are given, prompts interactively.
 
 | Flag | Description |
 |------|-------------|
 | `--model MODEL` | Set LLM model (e.g., `anthropic/claude-sonnet-4-6`) |
-| `--browser BACKEND` | Set browser backend (`basic`, `stealth`, `advanced`, or `persistent`) |
 | `--description TEXT` | Set role description |
 | `--system-prompt TEXT` | Set system prompt |
 | `--budget USD` | Set daily budget in USD |
@@ -142,9 +169,15 @@ When running `openlegion start`, you're in the interactive REPL:
 | `/addkey <svc> [key]` | Add an API credential to the vault at runtime |
 | `/removekey [name]` | Remove a credential from the vault |
 | `/reset` | Clear conversation with active agent |
+| `/credential [cmd]` | Manage vault credentials (add, list, remove) |
+| `/history` | View conversation history with active agent |
+| `/logs` | View agent logs |
+| `/restart [name]` | Restart a running agent |
+| `/project [cmd]` | Project management (list, use, info) |
+| `/help` | Show available commands |
 | `/quit` | Exit and stop runtime |
 
-**Aliases:** `/exit` = `/quit`, `/agents` = `/status`
+**Aliases:** `/exit` = `/quit`, `/agents` = `/status`, `/traces` = `/debug`
 
 ## Team Templates
 

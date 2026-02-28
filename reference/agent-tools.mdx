@@ -4,7 +4,7 @@ description: "All built-in tools available to agents"
 icon: "toolbox"
 ---
 
-Every agent has access to 40 built-in tools. Agents can also [create custom skills](/features/agents#self-extending-skills) at runtime and use [MCP tool servers](/features/mcp).
+Every agent has access to 44 built-in tools. Agents can also [create custom skills](/features/agents#self-extending-skills) at runtime and use [MCP tool servers](/features/mcp).
 
 ## Execution
 
@@ -36,24 +36,10 @@ Every agent has access to 40 built-in tools. Agents can also [create custom skil
 | `browser_click` | Click element by ref or CSS selector |
 | `browser_type` | Fill input by ref or CSS selector |
 | `browser_evaluate` | Run JavaScript in page |
-| `browser_reset` | Force-close browser and reconnect fresh (new IP for Bright Data) |
+| `browser_reset` | Force-close browser and reconnect fresh |
+| `browser_solve_captcha` | Auto-solve CAPTCHAs on the current page |
 
-Browser tools are pre-installed in the agent container image. Four backends are available:
-
-| Backend | Config Value | Description |
-|---------|-------------|-------------|
-| **Basic** | `basic` (default) | Standard Playwright Chromium |
-| **Stealth** | `stealth` | Camoufox anti-detect browser (automatic fingerprint rotation) |
-| **Advanced** | `advanced` | Bright Data Scraping Browser via CDP (residential proxies, CAPTCHA solving) |
-| **Persistent** | `persistent` | KasmVNC-based persistent browser with visual monitoring from the dashboard |
-
-Configure per-agent in `config/agents.yaml`:
-
-```yaml
-agents:
-  scraper:
-    browser_backend: advanced
-```
+All agents use a persistent Chrome + KasmVNC browser architecture. A Chromium instance runs with a persistent profile at `/data/browser_profile`, and KasmVNC serves a live browser view on port 6080. Patchright (stealth Playwright fork) connects via CDP for programmatic control.
 
 ## Memory
 
@@ -98,7 +84,10 @@ See the [Memory System](/features/memory) for details on the 5-layer memory arch
 | `read_shared_state` | Read from the shared blackboard |
 | `write_shared_state` | Write to the shared blackboard |
 | `list_shared_state` | Browse blackboard entries by prefix |
+| `watch_blackboard` | Watch for blackboard key changes (pattern-based) |
 | `publish_event` | Publish event to mesh pub/sub |
+| `subscribe_event` | Subscribe to mesh pub/sub events at runtime |
+| `claim_task` | Claim a task from the agent's task queue |
 | `save_artifact` | Save deliverable file and register on blackboard |
 
 All blackboard operations are subject to [permission checks](/reference/configuration#configpermissionsjson--agent-permissions).
@@ -130,7 +119,7 @@ See [Triggering & Automation](/features/triggering) for details.
 | `spawn_subagent` | Spawn a lightweight in-process sub-agent (no container overhead) |
 | `list_subagents` | List active in-process sub-agents spawned by this agent |
 
-`spawn_agent` creates a fully isolated container agent via the mesh host. `spawn_subagent` creates a lightweight in-process helper — faster but shares the parent's process. Sub-agents cannot spawn further sub-agents.
+`spawn_agent` creates a fully isolated container agent via the mesh host. `spawn_subagent` creates a lightweight in-process helper — faster but shares the parent's process. Sub-agents can nest up to depth 2 (max 3 concurrent per parent).
 
 ## Credential Vault
 

@@ -58,7 +58,7 @@ User (CLI REPL / Telegram / Discord / Webhook)
 │ :8401   │ │ :8402   │ │ :8403   │       │ :840N   │
 └─────────┘ └─────────┘ └─────────┘       └─────────┘
   Each agent: isolated Docker container, own /data volume,
-  own memory DB, own workspace, 512MB RAM, 0.5 CPU cap
+  own memory DB, own workspace, 1GB RAM, 1 CPU cap
 ```
 
 ## Trust Zones
@@ -113,10 +113,10 @@ Every inter-agent operation is checked against per-agent ACLs:
 ### Container Manager
 
 Each agent runs in an isolated Docker container with:
-- **Image**: `openlegion-agent:latest` (Python 3.12, system tools, Playwright, Chromium, Camoufox, KasmVNC)
+- **Image**: `openlegion-agent:latest` (Python 3.12, system tools, Patchright, Chromium, KasmVNC)
 - **Network**: Bridge with port mapping (macOS/Windows) or host network (Linux)
 - **Volume**: `openlegion_data_{agent_id}` mounted at `/data` (agent names with spaces/special chars are sanitized)
-- **Resources**: 512MB RAM limit, 50% CPU quota
+- **Resources**: 1GB RAM limit (includes Chrome + KasmVNC), 1 CPU quota, 256MB shared memory
 - **Security**: `no-new-privileges`, runs as non-root `agent` user (UID 1000)
 - **Ports**: 8400 (FastAPI), 6080 (KasmVNC for persistent browser)
 

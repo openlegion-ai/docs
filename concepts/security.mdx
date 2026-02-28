@@ -31,7 +31,7 @@ OpenLegion supports two isolation levels:
 
 ### Docker Containers (default)
 
-Agents run as non-root (UID 1000) with `no-new-privileges`, 512MB memory limit, 50% CPU cap, and no host filesystem access. Secure for most use cases.
+Agents run as non-root (UID 1000) with `no-new-privileges`, 1GB memory limit (includes Chrome + KasmVNC), 1 CPU quota, 256MB shared memory, and no host filesystem access. Secure for most use cases.
 
 ### Docker Sandbox microVMs
 
