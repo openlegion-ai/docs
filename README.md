@@ -1,6 +1,6 @@
 # OpenLegion Docs
 
-Documentation site for [OpenLegion](https://github.com/openlegion-ai/openlegion) — the open-source, container-isolated AI agent framework.
+Documentation site for [OpenLegion](https://github.com/openlegion-ai/openlegion) — the container-isolated AI agent framework.
 
 **Live:** [docs.openlegion.ai](https://docs.openlegion.ai)
 **Landing:** [openlegion.ai](https://openlegion.ai)
