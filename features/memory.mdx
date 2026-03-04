@@ -53,7 +53,7 @@ Nothing is permanently lost during compaction.
 
 ## Cross-Session Memory
 
-Facts saved with `memory_save` are stored in both the workspace (daily log) and the structured SQLite database. After a reset or restart, `memory_recall` retrieves them via semantic search:
+Facts saved with `memory_save` are stored in both the workspace (daily log) and the structured SQLite database. After a reset or restart, `memory_search` retrieves them via hybrid search:
 
 ```
 Session 1: User says "My cat's name is Whiskerino"
@@ -62,7 +62,7 @@ Session 1: User says "My cat's name is Whiskerino"
   === Chat Reset ===
 
 Session 2: User asks "What is my cat's name?"
-           Agent recalls "Whiskerino" via memory_recall
+           Agent recalls "Whiskerino" via memory_search
 ```
 
 ## Memory Tools
@@ -71,7 +71,6 @@ Session 2: User asks "What is my cat's name?"
 |------|---------|
 | `memory_search` | Hybrid search across workspace files and structured DB |
 | `memory_save` | Save fact to workspace and structured memory DB |
-| `memory_recall` | Semantic search over structured facts with category filtering |
 
 ## Workspace Files
 
