@@ -20,7 +20,7 @@ No LangChain. No Redis. No Kubernetes. No CEO agent. BSL 1.1 License.
 
 <Columns cols={2}>
   <Card title="Security by Architecture" icon="shield">
-    Every agent runs in an isolated Docker container (microVM when available). API keys live in a credential vault — agents never see them. Defense-in-depth with 6 security layers.
+    Every agent runs in an isolated Docker container (or microVM via `--sandbox`). API keys live in a credential vault — agents never see them. Defense-in-depth with 6 security layers.
   </Card>
   <Card title="Deterministic Orchestration" icon="diagram-project">
     YAML-defined DAG workflows with step dependencies, conditions, retries, and failure handlers. No LLM decides what runs next.
@@ -46,7 +46,7 @@ No LangChain. No Redis. No Kubernetes. No CEO agent. BSL 1.1 License.
     Trust zones, mesh host, and agent containers.
   </Card>
   <Card title="Agent Tools" icon="toolbox" href="/reference/agent-tools">
-    44 built-in tools including browser automation, web search, and memory.
+    41 built-in tools including browser automation, web search, and memory.
   </Card>
   <Card title="Workflows" icon="diagram-project" href="/features/workflows">
     Deterministic DAG workflows for multi-agent orchestration.

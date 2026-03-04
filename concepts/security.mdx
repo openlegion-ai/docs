@@ -10,7 +10,7 @@ OpenLegion was designed from day one assuming agents will be compromised. The se
 
 | Layer | Mechanism | What It Prevents |
 |-------|-----------|-----------------|
-| Runtime isolation | **Docker Sandbox microVMs** when available; falls back to Docker containers | Agent escape, kernel exploits |
+| Runtime isolation | **Docker containers** (default) or **Docker Sandbox microVMs** (opt-in via `--sandbox`) | Agent escape, kernel exploits |
 | Container hardening | Non-root user, no-new-privileges, memory/CPU limits | Privilege escalation, resource abuse |
 | Credential separation | Vault holds keys, agents call via proxy | Key leakage, unauthorized API use |
 | Permission enforcement | Per-agent ACLs for messaging, blackboard, pub/sub, APIs | Unauthorized data access |
@@ -31,7 +31,7 @@ OpenLegion supports two isolation levels:
 
 ### Docker Containers (default)
 
-Agents run as non-root (UID 1000) with `no-new-privileges`, 1GB memory limit (includes Chrome + KasmVNC), 1 CPU quota, 256MB shared memory, and no host filesystem access. Secure for most use cases.
+Agents run as non-root (UID 1000) with `no-new-privileges`, 384MB memory limit, 0.15 CPU quota, and no host filesystem access. Browser automation runs in a separate shared service container (2GB RAM, 1 CPU). Secure for most use cases.
 
 ### Docker Sandbox microVMs
 

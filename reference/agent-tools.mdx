@@ -4,7 +4,7 @@ description: "All built-in tools available to agents"
 icon: "toolbox"
 ---
 
-Every agent has access to 44 built-in tools. Agents can also [create custom skills](/features/agents#self-extending-skills) at runtime and use [MCP tool servers](/features/mcp).
+Every agent has access to 41 built-in tools. Agents can also [create custom skills](/features/agents#self-extending-skills) at runtime and use [MCP tool servers](/features/mcp).
 
 ## Execution
 
@@ -39,7 +39,7 @@ Every agent has access to 44 built-in tools. Agents can also [create custom skil
 | `browser_reset` | Force-close browser and reconnect fresh |
 | `browser_solve_captcha` | Auto-solve CAPTCHAs on the current page |
 
-All agents use a persistent Chrome + KasmVNC browser architecture. A Chromium instance runs with a persistent profile at `/data/browser_profile`, and KasmVNC serves a live browser view on port 6080. Patchright (stealth Playwright fork) connects via CDP for programmatic control.
+All agents share a persistent Camoufox (stealth Firefox) browser service running in a separate container. KasmVNC serves a live browser view on port 6080. Patchright connects via CDP for programmatic control.
 
 ## Memory
 
@@ -47,7 +47,6 @@ All agents use a persistent Chrome + KasmVNC browser architecture. A Chromium in
 |------|---------|
 | `memory_search` | Hybrid search across workspace files and structured DB |
 | `memory_save` | Save fact to workspace and structured memory DB |
-| `memory_recall` | Semantic search over structured facts with category filtering |
 
 See the [Memory System](/features/memory) for details on the 5-layer memory architecture.
 
@@ -96,8 +95,7 @@ All blackboard operations are subject to [permission checks](/reference/configur
 
 | Tool | Purpose |
 |------|---------|
-| `set_cron` | Schedule a recurring job |
-| `set_heartbeat` | Enable autonomous monitoring with probes |
+| `set_cron` | Schedule a recurring job (pass `heartbeat=true` for autonomous monitoring with probes) |
 | `list_cron` | List scheduled jobs |
 | `remove_cron` | Remove a scheduled job |
 
@@ -108,7 +106,6 @@ See [Triggering & Automation](/features/triggering) for details.
 | Tool | Purpose |
 |------|---------|
 | `create_skill` | Write a new Python skill at runtime |
-| `list_custom_skills` | List all custom skills the agent has created |
 | `reload_skills` | Hot-reload all skills |
 
 ## Agent Spawning
@@ -118,6 +115,7 @@ See [Triggering & Automation](/features/triggering) for details.
 | `spawn_agent` | Spawn a new ephemeral agent in its own container via the mesh |
 | `spawn_subagent` | Spawn a lightweight in-process sub-agent (no container overhead) |
 | `list_subagents` | List active in-process sub-agents spawned by this agent |
+| `wait_for_subagent` | Wait for a subagent to complete and return its result |
 
 `spawn_agent` creates a fully isolated container agent via the mesh host. `spawn_subagent` creates a lightweight in-process helper — faster but shares the parent's process. Sub-agents can nest up to depth 2 (max 3 concurrent per parent).
 
@@ -128,4 +126,3 @@ See [Triggering & Automation](/features/triggering) for details.
 | `vault_generate_secret` | Generate a secure random secret |
 | `vault_capture_from_page` | Capture credentials from a browser page |
 | `vault_list` | List available credentials in the vault |
-| `vault_status` | Check vault health and credential status |
