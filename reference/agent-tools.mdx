@@ -35,11 +35,11 @@ Every agent has access to 41 built-in tools. Agents can also [create custom skil
 | `browser_screenshot` | Capture page screenshot |
 | `browser_click` | Click element by ref or CSS selector |
 | `browser_type` | Fill input by ref or CSS selector |
-| `browser_evaluate` | Run JavaScript in page |
+| `browser_scroll` | Scroll page up/down or scroll element into view |
 | `browser_reset` | Force-close browser and reconnect fresh |
 | `browser_solve_captcha` | Auto-solve CAPTCHAs on the current page |
 
-All agents share a persistent Camoufox (stealth Firefox) browser service running in a separate container. KasmVNC serves a live browser view on port 6080. Patchright connects via CDP for programmatic control.
+All agents share a persistent Camoufox (stealth Firefox) browser service running in a separate container. KasmVNC serves a live browser view on port 6080.
 
 ## Memory
 
