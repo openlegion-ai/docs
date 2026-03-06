@@ -7,56 +7,15 @@ icon: "terminal"
 ## CLI Commands
 
 ```
-openlegion [--version]
-├── start [--config PATH] [-d] [--sandbox]  # Start runtime + interactive REPL (inline setup on first run)
-├── stop                                 # Stop all containers
-├── chat <name> [--port PORT]            # Connect to a running agent
-├── status [--port PORT]                 # Show agent status
-│
-├── agent
-│   ├── add [name]                       # Add a new agent
-│   ├── edit <name>                      # Edit agent settings (model, browser, budget)
-│   ├── list                             # List configured agents
-│   ├── remove <name> [--yes]            # Remove an agent
-│   └── restart <name>                   # Restart a running agent
-│
-├── credential
-│   ├── add <name> [value]               # Add an API credential to the vault
-│   ├── list                             # List configured credentials
-│   └── remove <name>                    # Remove a credential
-│
-├── project
-│   ├── create <name>                    # Create a new project
-│   ├── list                             # List all projects
-│   ├── delete <name>                    # Delete a project
-│   ├── add-agent <project> <agent>      # Add agent to project
-│   ├── remove-agent <project> <agent>   # Remove agent from project
-│   └── edit <name>                      # Edit project settings
-│
-├── webhook
-│   ├── list                             # List configured webhooks
-│   ├── add <name>                       # Add a webhook endpoint
-│   ├── remove <name>                    # Remove a webhook
-│   └── test <name> [--payload JSON]     # Send a test payload
-│
-├── config
-│   ├── show [--json]                    # Show effective configuration
-│   ├── validate                         # Check config for errors
-│   └── path                             # Show config file paths
-│
-├── health                               # Pre-flight dependency checks
-├── logs [-f] [--level LEVEL]            # View runtime logs
-│
-├── skill
-│   ├── install <repo_url> [--ref TAG]         # Install skill from git repo
-│   ├── list                                   # List installed marketplace skills
-│   └── remove <name> [--yes]                  # Remove an installed skill
-│
-└── channels
-    ├── add [telegram|discord|slack|whatsapp]  # Connect a messaging channel
-    ├── list                                    # Show configured channels
-    └── remove <name>                           # Disconnect a channel
+openlegion [--version] [--json] [--verbose | --quiet]
+├── start [--config PATH] [-d] [--sandbox]  # Start runtime + interactive REPL
+├── stop                                     # Stop all containers
+├── chat [name] [--port PORT]                # Connect to a running agent
+├── status [--port PORT] [--wide] [--watch N] [--json]  # Show agent status
+└── version [-v]                             # Show version info
 ```
+
+Agent management, credential management, channel setup, project management, and other operations are available as **interactive REPL commands** inside `openlegion start`, or run inline during first-run setup.
 
 ## Command Details
 
@@ -66,17 +25,17 @@ Launches the mesh host, spins up agent containers, and starts the interactive RE
 
 | Flag | Description |
 |------|-------------|
-| `--config PATH` | Path to custom config directory |
+| `--config PATH` | Path to mesh config YAML file (default: `config/mesh.yaml`) |
 | `-d` | Run in background (daemon mode) |
-| `--sandbox` | Use Docker Sandbox microVMs for maximum isolation |
+| `--sandbox` | Use Docker Sandbox microVMs for maximum isolation (requires Docker Desktop 4.58+) |
 
 ### `openlegion stop`
 
-Cleanly shuts down all agent containers and the mesh host.
+Cleanly shuts down all agent containers and the mesh host. Sends SIGTERM to the background host process if running, then cleans up any remaining Docker containers.
 
-### `openlegion chat <name>`
+### `openlegion chat [name]`
 
-Connect to a running agent from a separate terminal. Useful when running in daemon mode.
+Connect to a running agent from a separate terminal. Useful when running in daemon mode (`-d`). If no name is given, prompts to select from running agents.
 
 | Flag | Description |
 |------|-------------|
@@ -84,100 +43,83 @@ Connect to a running agent from a separate terminal. Useful when running in daem
 
 ### `openlegion status`
 
-Show health and status of all running agents.
-
-### `openlegion agent add [name]`
-
-Add a new agent. If no name is given, prompts interactively for agent configuration.
-
-### `openlegion agent list`
-
-List all configured agents with their roles and models.
-
-### `openlegion agent edit <name>`
-
-Edit an agent's settings (model, budget, etc.). If no flags are given, prompts interactively.
+Show health and status of all configured and running agents.
 
 | Flag | Description |
 |------|-------------|
-| `--model MODEL` | Set LLM model (e.g., `anthropic/claude-sonnet-4-6`) |
-| `--description TEXT` | Set role description |
-| `--system-prompt TEXT` | Set system prompt |
-| `--budget USD` | Set daily budget in USD |
+| `--port PORT` | Mesh host port (default: 8420) |
+| `--wide`, `-w` | Show additional columns (role, cost) |
+| `--watch N` | Auto-refresh every N seconds |
+| `--json` | Output as JSON |
 
-### `openlegion agent remove <name>`
+### `openlegion version`
 
-Remove an agent from the configuration.
-
-| Flag | Description |
-|------|-------------|
-| `--yes` | Skip confirmation prompt |
-
-### `openlegion channels add [telegram|discord|slack|whatsapp]`
-
-Connect a messaging channel. Prompts for the required credentials (bot token, API key, etc.).
-
-### `openlegion channels list`
-
-Show all configured channels and their status.
-
-### `openlegion channels remove <type>`
-
-Disconnect a channel.
-
-### `openlegion skill install <repo_url>`
-
-Install a skill from a git repository into the marketplace.
+Show version and environment information.
 
 | Flag | Description |
 |------|-------------|
-| `--ref TAG` | Install a specific version, tag, or branch |
-
-### `openlegion skill list`
-
-List all installed marketplace skills.
-
-### `openlegion skill remove <name>`
-
-Remove an installed marketplace skill.
-
-| Flag | Description |
-|------|-------------|
-| `-y` | Skip confirmation prompt |
+| `-v` | Show extended info (Python version, Docker version, OS, config path, agent count) |
 
 ## Interactive REPL Commands
 
-When running `openlegion start`, you're in the interactive REPL:
+When running `openlegion start`, you're in the interactive REPL. These commands are only available inside the REPL session:
+
+### Chat & Navigation
 
 | Command | Description |
 |---------|-------------|
 | `@agent <message>` | Send message to a specific agent |
 | `/use <agent>` | Switch active agent |
 | `/agents` | List all running agents |
-| `/add` | Add a new agent (hot-adds to running system) |
-| `/edit [name]` | Edit agent settings (model, browser, budget) |
-| `/remove [name]` | Remove an agent |
 | `/status` | Show agent health |
 | `/broadcast <msg>` | Send message to all agents |
 | `/steer <msg>` | Inject message into a busy agent's context |
-| `/costs` | Show today's spend, context usage, and model health |
-| `/blackboard [cmd]` | View/edit shared blackboard entries |
-| `/queue` | Show agent task queue status |
-| `/workflow [cmd]` | List or trigger workflows |
-| `/cron [cmd]` | Manage cron jobs (list, add, pause, resume, run, remove) |
-| `/debug [trace]` | Show recent request traces |
-| `/addkey <svc> [key]` | Add an API credential to the vault at runtime |
-| `/removekey [name]` | Remove a credential from the vault |
 | `/reset` | Clear conversation with active agent |
-| `/credential [cmd]` | Manage vault credentials (add, list, remove) |
 | `/history` | View conversation history with active agent |
-| `/logs` | View agent logs |
-| `/restart [name]` | Restart a running agent |
-| `/project [cmd]` | Project management (list, use, info) |
 | `/help` | Show available commands |
 | `/quit` | Exit and stop runtime |
 
-**Aliases:** `/exit` = `/quit`, `/agents` = `/status`, `/traces` = `/debug`
+### Agent Management
+
+| Command | Description |
+|---------|-------------|
+| `/add` | Add a new agent (hot-adds to running system) |
+| `/edit [name]` | Edit agent settings (model, browser, budget) |
+| `/remove [name]` | Remove an agent |
+| `/restart [name]` | Restart a running agent |
+
+### Monitoring & Debugging
+
+| Command | Description |
+|---------|-------------|
+| `/costs` | Show today's spend, context usage, and model health |
+| `/debug [trace]` | Show recent request traces |
+| `/logs` | View agent logs |
+| `/blackboard [cmd]` | View/edit shared blackboard entries (list, get, set, del) |
+| `/queue` | Show agent task queue status |
+
+### Automation
+
+| Command | Description |
+|---------|-------------|
+| `/workflow [cmd]` | List or trigger workflows (list, run) |
+| `/cron [cmd]` | Manage cron jobs (list, del, pause, resume, run) |
+
+### Credentials & Channels
+
+| Command | Description |
+|---------|-------------|
+| `/addkey <svc> [key]` | Add an API credential to the vault at runtime |
+| `/removekey [name]` | Remove a credential from the vault |
+| `/credential [cmd]` | Manage vault credentials (add, list, remove) |
+
+### Projects
+
+| Command | Description |
+|---------|-------------|
+| `/project [cmd]` | Project management (list, use, info) |
+
+**Aliases:** `/exit` = `/quit`, `/traces` = `/debug`
 
 ## Team Templates
 
@@ -189,3 +131,5 @@ Templates offered during first-run setup (via `openlegion start`):
 | `sales` | researcher, qualifier, outreach | Sales pipeline team |
 | `devteam` | pm, engineer, reviewer | Software development team |
 | `content` | researcher, writer, editor | Content creation team |
+| `deep-research` | researcher | Deep research specialist |
+| `monitor` | monitor | System monitoring agent |
