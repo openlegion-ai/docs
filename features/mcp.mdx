@@ -26,6 +26,14 @@ agents:
 
 Each server is launched as a subprocess inside the agent container using stdio transport. Tools are discovered automatically via the MCP protocol and appear in the LLM's tool list alongside built-in skills.
 
+<Note>
+npm-based MCP servers (like `@modelcontextprotocol/server-filesystem`) require Node.js installed in the agent container. Python-based servers work by default.
+</Note>
+
+<Note>
+If one MCP server fails to start, other servers continue normally. Built-in skills are always available regardless of MCP server status.
+</Note>
+
 ## How It Works
 
 1. Agent container reads `MCP_SERVERS` from environment (set by the runtime)

@@ -12,7 +12,7 @@ Persistent cron jobs that dispatch messages to agents on a schedule. Agents can 
 
 Supports:
 - **5-field cron expressions**: `minute hour dom month dow` (e.g., `0 9 * * 1-5` for weekdays at 9am)
-- **Interval shorthand**: `every 30m`, `every 2h`
+- **Interval shorthand**: `every 30s`, `every 30m`, `every 2h`, `every 1d`
 - **State persisted** to `config/cron.json`
 
 ## Heartbeat System
@@ -41,6 +41,19 @@ curl -X POST http://localhost:8420/webhook/hook/hook_a1b2c3d4 \
 
 Webhooks can also trigger [workflows](/features/workflows).
 
+### Direct Workflow Trigger
+
+Trigger a workflow by name using a dedicated endpoint:
+
+```bash
+curl -X POST http://localhost:8420/webhook/trigger/prospect_pipeline \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $WEBHOOK_SECRET" \
+  -d '{"company": "Acme Corp"}'
+```
+
+This endpoint requires the `WEBHOOK_SECRET` environment variable to be set for authentication.
+
 ## File Watchers
 
 Poll directories for new/modified files matching glob patterns. Uses polling (not inotify) for Docker volume compatibility.
@@ -51,5 +64,5 @@ watchers:
   - path: "/data/inbox"
     pattern: "*.csv"
     agent: "researcher"
-    message: "New prospect list uploaded: {filename}. Begin research."
+    message: "New prospect list uploaded: {filename} at {filepath}. Begin research."
 ```

@@ -45,9 +45,9 @@ Task mode is used for workflow steps where an agent is given a specific objectiv
 
 ## Chat Mode
 
-Accepts a user message. On the first message, loads workspace context (AGENTS.md, SOUL.md, USER.md, MEMORY.md, SYSTEM.md) into the system prompt, injects a live Runtime Context block (permissions, budget, fleet, cron), and searches memory for relevant facts. Executes tool calls in a bounded loop (max 30 rounds) and runs context compaction when needed.
+Accepts a user message. On the first message, loads workspace context (INSTRUCTIONS.md, SOUL.md, USER.md, MEMORY.md, SYSTEM.md, PROJECT.md) into the system prompt, injects a live Runtime Context block (permissions, budget, fleet, cron), and searches memory for relevant facts. Executes tool calls in a bounded loop (max 30 rounds) and runs context compaction when needed.
 
-Chat mode is used for interactive conversations via CLI, Telegram, Discord, Slack, or WhatsApp.
+Chat mode is used for interactive conversations via CLI, Telegram, Discord, Slack, WhatsApp, or Webhooks.
 
 ## Self-Extending Skills
 
@@ -86,4 +86,6 @@ Memory retrieval tools (`memory_search`) are exempt since repeated searches are 
 Agents have two ways to spawn helpers:
 
 - **`spawn_agent`** — Creates a fully isolated container agent via the mesh host. Useful for tasks that need their own tools, memory, and security boundary.
-- **`spawn_subagent`** — Creates a lightweight in-process sub-agent. Faster startup but shares the parent's process. Sub-agents cannot spawn further sub-agents.
+- **`spawn_subagent`** — Creates a lightweight in-process sub-agent. Faster startup but shares the parent's process. Sub-agents can nest up to depth 2 (a sub-agent can spawn its own sub-agents).
+
+**Subagent limits:** max 3 concurrent per parent, max nesting depth 2, max TTL 600s, max 10 iterations each.

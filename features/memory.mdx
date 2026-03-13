@@ -13,6 +13,8 @@ Layer 5: Context Manager          <- Manages the LLM's context window
   |  Monitors token usage
   |  Proactive flush at 60% capacity
   |  Auto-compacts at 70% capacity
+  |  Warning at 80% capacity
+  |  Emergency hard-prune at 90% capacity
   |  Extracts facts before discarding messages
   |
 Layer 4: Learnings                <- Self-improvement through failure tracking
@@ -21,9 +23,12 @@ Layer 4: Learnings                <- Self-improvement through failure tracking
   |  Auto-injected into system prompt each session
   |
 Layer 3: Workspace Files          <- Durable, human-readable storage
-  |  AGENTS.md, SOUL.md, USER.md  (loaded into system prompt)
-  |  SYSTEM.md                    (auto-generated architecture guide + runtime snapshot)
-  |  MEMORY.md                    (curated long-term facts)
+  |  INSTRUCTIONS.md (8K cap)     (loaded into system prompt)
+  |  SOUL.md (4K cap)             (agent personality and behavioral instructions)
+  |  USER.md (4K cap)             (user preferences and context)
+  |  PROJECT.md (read-only)       (optional project context)
+  |  SYSTEM.md (6K cap, read-only, auto-generated) (architecture guide + runtime snapshot)
+  |  MEMORY.md (16K cap)          (curated long-term facts)
   |  HEARTBEAT.md                 (autonomous monitoring rules)
   |  memory/YYYY-MM-DD.md         (daily session logs)
   |  BM25 search across all files
@@ -78,11 +83,12 @@ Each agent has a persistent workspace at `/data/workspace/`:
 
 | File | Purpose |
 |------|---------|
-| `AGENTS.md` | Fleet-wide agent descriptions (loaded into system prompt) |
-| `SOUL.md` | Agent personality and behavioral instructions |
-| `USER.md` | User preferences and context |
-| `SYSTEM.md` | Auto-generated architecture guide and runtime snapshot |
-| `MEMORY.md` | Curated long-term facts |
+| `INSTRUCTIONS.md` | Fleet-wide agent descriptions — loaded into system prompt (8K cap) |
+| `SOUL.md` | Agent personality and behavioral instructions (4K cap) |
+| `USER.md` | User preferences and context (4K cap) |
+| `PROJECT.md` | Optional project context (read-only) |
+| `SYSTEM.md` | Auto-generated architecture guide and runtime snapshot (6K cap, read-only) |
+| `MEMORY.md` | Curated long-term facts (16K cap) |
 | `HEARTBEAT.md` | Autonomous monitoring rules |
 | `memory/YYYY-MM-DD.md` | Daily session logs |
 | `learnings/errors.md` | Tool failure history |

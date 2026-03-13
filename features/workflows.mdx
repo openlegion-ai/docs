@@ -14,16 +14,22 @@ Workflows live in `config/workflows/*.yaml`:
 name: prospect_pipeline
 trigger: new_prospect
 timeout: 600
+on_complete: pipeline_finished        # PubSub topic published on completion
 steps:
   - id: research
     agent: research
+    capability: web_research           # match agent by capability instead of name
     task_type: research_prospect
-    input_from: trigger.payload
+    input_from: trigger.payload        # also: blackboard://context/market_data
+    timeout: 120                       # per-step timeout in seconds (default: 120)
   - id: qualify
     agent: qualify
     task_type: qualify_lead
     depends_on: [research]
     condition: "research.result.score >= 5"
+    fallback_agent: backup_qualifier   # target agent for fallback strategy
+    requires_approval: true            # pause for human approval before executing
+    approval_timeout: 3600             # seconds to wait for approval (default: 3600)
 ```
 
 ## Step Dependencies
@@ -49,14 +55,17 @@ steps:
       max_attempts: 3
       delay: 30
     on_failure:
-      action: skip  # or "abort" to stop the workflow
+      action: skip  # "retry", "skip", "abort", or "fallback"
 ```
+
+The `fallback` strategy routes the step to the agent specified in `fallback_agent`.
 
 ## Triggering Workflows
 
 Workflows can be triggered by:
 - **Pub/Sub events**: An agent publishes an event matching the workflow's `trigger` field
 - **Webhooks**: External systems POST to a webhook URL
+- **Cron**: Schedule workflows on a recurring basis via the cron scheduler
 - **Manual dispatch**: Via the CLI or REPL
 
 ## How the Orchestrator Works
