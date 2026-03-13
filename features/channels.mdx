@@ -4,20 +4,13 @@ description: "Connect agents to Telegram, Discord, Slack, WhatsApp, and more"
 icon: "comments"
 ---
 
-Chat with your agent fleet via **Telegram**, **Discord**, **Slack**, **WhatsApp**, or **CLI**. Channels provide a unified interface for interacting with agents from any platform.
+Chat with your agent fleet via **Telegram**, **Discord**, **Slack**, **WhatsApp**, **Webhooks**, or **CLI**. Channels provide a unified interface for interacting with agents from any platform.
 
 ## Connecting Channels
 
-```bash
-openlegion channels add telegram    # prompts for bot token from @BotFather
-openlegion channels add discord     # prompts for bot token
-openlegion channels add slack       # prompts for Slack bot token (Socket Mode)
-openlegion channels add whatsapp    # prompts for WhatsApp Cloud API credentials
-openlegion channels list            # check what's connected
-openlegion channels remove telegram # disconnect
-```
+Channels are configured through config files and environment variables (see [Channel Configuration](#channel-configuration) below). Enable a channel in `config/mesh.yaml` and set the corresponding API token environment variables.
 
-On next `openlegion start`, a pairing code appears — send it to your bot to link.
+On next `openlegion start`, a pairing code appears — send it to your bot to link. The first user to interact becomes the channel owner and can manage access for other users.
 
 ## Supported Channels
 
@@ -28,6 +21,7 @@ On next `openlegion start`, a pairing code appears — send it to your bot to li
 | **Discord** | Bot token from Discord Developer Portal | Per-user agent routing, chunked messages |
 | **Slack** | Bot token (Socket Mode — no webhooks needed) | Per-user agent routing, chunked messages |
 | **WhatsApp** | Access token + phone number ID from WhatsApp Cloud API | Per-user agent routing, chunked messages |
+| **Webhooks** | Webhook URL configuration in `config/mesh.yaml` | HTTP-based integration, event-driven |
 
 ## How Channels Work
 
@@ -83,3 +77,7 @@ These commands work across all channels:
 | `/debug` | Show recent request traces |
 | `/addkey <svc> [key]` | Add an API credential to the vault |
 | `/help` | Show available commands |
+
+<Note>
+The following commands are available only in the CLI REPL: `/add`, `/agent`, `/edit`, `/remove`, `/restart`, `/history`, `/blackboard`, `/queue`, `/workflow`, `/cron`, `/project`, `/credential`, `/removekey`, `/logs`, `/traces`
+</Note>

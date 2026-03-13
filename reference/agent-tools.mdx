@@ -4,13 +4,13 @@ description: "All built-in tools available to agents"
 icon: "toolbox"
 ---
 
-Every agent has access to 41 built-in tools. Agents can also [create custom skills](/features/agents#self-extending-skills) at runtime and use [MCP tool servers](/features/mcp).
+Every agent has access to 47 built-in tools. Agents can also [create custom skills](/features/agents#self-extending-skills) at runtime and use [MCP tool servers](/features/mcp).
 
 ## Execution
 
 | Tool | Purpose |
 |------|---------|
-| `exec` | Shell command execution with timeout |
+| `run_command` | Shell command execution (max timeout 300s) |
 
 ## File Operations
 
@@ -31,11 +31,17 @@ Every agent has access to 41 built-in tools. Agents can also [create custom skil
 | Tool | Purpose |
 |------|---------|
 | `browser_navigate` | Open URL, extract page text |
-| `browser_snapshot` | Accessibility tree snapshot with element refs (e1, e2, ...) |
+| `browser_get_elements` | Accessibility tree snapshot with element refs (e1, e2, ...) |
 | `browser_screenshot` | Capture page screenshot |
 | `browser_click` | Click element by ref or CSS selector |
 | `browser_type` | Fill input by ref or CSS selector |
 | `browser_scroll` | Scroll page up/down or scroll element into view |
+| `browser_hover` | Hover over element by ref or CSS selector |
+| `browser_press_key` | Press keyboard key (Enter, Escape, Tab, etc.) |
+| `browser_wait_for` | Wait for element, navigation, or network idle |
+| `browser_go_back` | Navigate back in browser history |
+| `browser_go_forward` | Navigate forward in browser history |
+| `browser_switch_tab` | Switch between open browser tabs |
 | `browser_reset` | Force-close browser and reconnect fresh |
 | `browser_solve_captcha` | Auto-solve CAPTCHAs on the current page |
 
@@ -68,13 +74,13 @@ See the [Memory System](/features/memory) for details on the 5-layer memory arch
 
 | Tool | Purpose |
 |------|---------|
-| `update_workspace` | Update identity files (HEARTBEAT.md, USER.md) |
+| `update_workspace` | Update identity files (SOUL.md, INSTRUCTIONS.md, USER.md, HEARTBEAT.md) |
 
 ## Introspection
 
 | Tool | Purpose |
 |------|---------|
-| `introspect` | Query own runtime state: permissions, budget, fleet, cron, health |
+| `get_system_status` | Query own runtime state: permissions, budget, fleet, cron, health |
 
 ## Shared State (Blackboard)
 

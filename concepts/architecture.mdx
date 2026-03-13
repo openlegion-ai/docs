@@ -88,6 +88,8 @@ SQLite-backed key-value store with versioning, TTL, and garbage collection.
 
 Agents never hold API keys. All external API calls route through the mesh. The vault uses a two-tier prefix system: `OPENLEGION_SYSTEM_*` for LLM provider keys (never agent-accessible) and `OPENLEGION_CRED_*` for agent-tier tool/service keys. Budget limits are enforced before dispatching LLM calls and token usage is recorded after each response.
 
+When an agent needs a credential at runtime, it receives an opaque handle (`$CRED{name}`) instead of the raw secret. The handle is resolved by the mesh proxy at call time — the actual key never enters the agent container.
+
 ### Model Failover
 
 Configurable failover chains cascade across LLM providers transparently. `ModelHealthTracker` applies exponential cooldown per model (transient errors: 60s -> 300s -> 1500s, billing/auth errors: 1h). Permanent errors (400, 404) don't cascade. Streaming failover is supported — if a connection fails mid-stream, the next model in the chain picks up.
@@ -117,10 +119,14 @@ Each agent runs in an isolated Docker container with:
 - **Network**: Bridge with port mapping (macOS/Windows) or host network (Linux)
 - **Volume**: `openlegion_data_{agent_id}` mounted at `/data` (agent names with spaces/special chars are sanitized)
 - **Resources**: 384MB RAM limit, 0.15 CPU quota (configurable via `agents.yaml`)
-- **Security**: `no-new-privileges`, runs as non-root `agent` user (UID 1000)
+- **Security**: `no-new-privileges`, runs as non-root `agent` user (UID 1000), PID limit 256, read-only root filesystem, `cap_drop: ALL`, 100MB noexec tmpfs
 - **Ports**: 8400 (FastAPI)
 
 A separate shared **browser service container** (Camoufox + KasmVNC) runs with 2GB RAM, 1 CPU, and 512MB shared memory. All agents share this browser service. KasmVNC serves a live browser view on port 6080.
+
+### Projects
+
+Multi-project namespaces allow you to run separate agent fleets with isolated configuration. Each project gets its own `agents.yaml`, `permissions.json`, and auto-scoped blackboard — keys are automatically namespaced per project so fleets don't collide.
 
 ## Design Principles
 

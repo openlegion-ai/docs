@@ -1,0 +1,80 @@
+---
+title: "Managed Hosting"
+description: "A dedicated OpenLegion server provisioned and managed for you"
+icon: "cloud"
+---
+
+OpenLegion managed hosting gives you a dedicated server running your own agent fleet — no infrastructure to set up or maintain. Sign up at [app.openlegion.ai](https://app.openlegion.ai), pick a plan, and your fleet is live in under 15 minutes.
+
+## What you get
+
+- **Dedicated server** — your own VPS, not shared with anyone else
+- **Custom subdomain** — `{your-name}.engine.openlegion.ai`
+- **Automatic provisioning** — server creation, Docker setup, and OpenLegion installation handled for you
+- **Health monitoring** — your instance is monitored and auto-restarted if it becomes unhealthy
+- **Subscription management** — upgrade, downgrade, or cancel from the app dashboard
+
+## How it works
+
+```
+app.openlegion.ai                    your-fleet.engine.openlegion.ai
+┌─────────────────────┐              ┌──────────────────────────────┐
+│   App Portal        │              │   Your Dedicated Server      │
+│                     │   provisions │                              │
+│  - Sign up / login  │ ──────────> │  - OpenLegion engine         │
+│  - Subscribe        │              │  - Agent containers          │
+│  - Manage billing   │              │  - Engine dashboard          │
+│  - Monitor status   │              │  - Channels, workflows, etc. │
+└─────────────────────┘              └──────────────────────────────┘
+```
+
+**The app portal** at [app.openlegion.ai](https://app.openlegion.ai) handles account creation, subscription billing, server provisioning, and instance status monitoring.
+
+**Your dedicated server** at `{subdomain}.engine.openlegion.ai` runs the full OpenLegion engine — the same software available to self-hosted users. You configure agents, connect channels, set up workflows, and interact with your fleet through the engine dashboard.
+
+## Provisioning
+
+When you subscribe and choose a subdomain, the platform:
+
+1. Creates a dedicated cloud server
+2. Installs Docker and the OpenLegion engine
+3. Configures your instance and starts the agent fleet
+4. Sets up DNS so your subdomain resolves to your server
+
+This takes 10-15 minutes. The setup page shows live progress, and you're notified when your fleet is ready.
+
+## Two dashboards
+
+| Dashboard | URL | Purpose |
+|-----------|-----|---------|
+| **App dashboard** | [app.openlegion.ai](https://app.openlegion.ai) | Subscription, billing, instance status, plan changes |
+| **Engine dashboard** | `{subdomain}.engine.openlegion.ai/dashboard` | Agent configuration, channels, workflows, monitoring, costs |
+
+The app dashboard is where you manage your account. The engine dashboard is where you work with your agents. After initial setup, you'll spend most of your time in the engine dashboard.
+
+## What's included in every plan
+
+- Container-isolated agent execution (each agent in its own Docker container)
+- 100+ LLM providers via LiteLLM (bring your own API keys)
+- Real-time monitoring dashboard
+- Custom subdomain
+- Multi-channel support (Telegram, Discord, Slack, WhatsApp)
+- YAML workflow orchestration
+- Per-agent cost tracking and budget controls
+- Browser automation (plan-dependent: 1, 5, or 10 concurrent browsers)
+- Automatic health monitoring and recovery
+
+## Self-hosting vs managed
+
+| | Managed Hosting | Self-Hosted |
+|---|---|---|
+| **Setup** | Sign up and go live in under 15 minutes | Clone repo, install dependencies, configure |
+| **Infrastructure** | Handled for you | You manage the server |
+| **Updates** | Admin-triggered updates | You pull and restart |
+| **Monitoring** | Built-in health checks + auto-recovery | You set up monitoring |
+| **Cost** | $19-119/mo + your LLM API costs | Your server costs + LLM API costs |
+| **Control** | Full engine access via dashboard | Full source code access |
+
+<Card title="Get Started" icon="rocket" href="/quickstart" horizontal>
+  Sign up and launch your fleet in under 15 minutes.
+</Card>

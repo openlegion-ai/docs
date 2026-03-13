@@ -1,0 +1,54 @@
+---
+title: "App Dashboard"
+description: "Monitor your instance and manage your subscription"
+icon: "gauge"
+---
+
+The app dashboard at [app.openlegion.ai](https://app.openlegion.ai) is where you monitor your instance status and manage your subscription. For agent configuration and fleet management, use the [engine dashboard](/features/dashboard) on your subdomain.
+
+## Fleet status
+
+When your instance is running, the dashboard shows:
+
+- **Status badge** — Online, Resizing, Starting up, or Paused
+- **Subdomain** — your fleet URL (`{subdomain}.engine.openlegion.ai`)
+- **Plan summary** — current plan, agent count, and project count
+- **Open Dashboard** button — takes you directly to your engine dashboard
+
+The page auto-refreshes when your instance is in a transitional state (starting up, resizing).
+
+## Instance states
+
+| State | Meaning |
+|-------|---------|
+| **Online** | Your fleet is running normally |
+| **Starting up** | Instance is recovering or restarting (auto-refreshes) |
+| **Resizing** | Server is being resized for a plan change (~1 minute) |
+| **Paused** | Instance paused due to a payment issue |
+| **Provisioning Failed** | Server setup didn't complete — retries from scratch |
+| **Unhealthy** | Engine not responding to health checks. Auto-restart attempts in progress (max 3). |
+| **Configuration Failed** | Server is ready but configuration didn't complete — retry is usually quick |
+
+If provisioning or configuration fails, you'll see a **Retry** button and a **Contact Support** link ([support@openlegion.ai](mailto:support@openlegion.ai)). Configuration failures retry just the configuration step. Full provisioning failures clean up the server and start fresh.
+
+## Settings
+
+The **Settings** page shows your current plan and lets you:
+
+- **Change plan** — select a different tier or switch between monthly and yearly billing
+- **Resume** — reactivate a cancelled subscription before the period ends
+- **Cancel** — cancel your subscription (active until end of billing period)
+
+See [Plans & Billing](/managed/plans) for details on upgrades, downgrades, and payment handling.
+
+## Engine dashboard
+
+The engine dashboard at `{subdomain}.engine.openlegion.ai/dashboard` is where you do the actual work with your agents. See the [Dashboard](/features/dashboard) page for full documentation on what's available there, including:
+
+- Agent configuration and monitoring
+- Live event feed and request traces
+- Chat with agents directly
+- Shared blackboard browser
+- Cost tracking and budgets
+- Cron jobs and automation
+- Browser viewer for agent browser sessions

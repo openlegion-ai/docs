@@ -17,7 +17,16 @@
             "group": "Getting Started",
             "pages": [
               "index",
-              "quickstart"
+              "quickstart",
+              "self-hosting"
+            ]
+          },
+          {
+            "group": "Managed Hosting",
+            "pages": [
+              "managed/overview",
+              "managed/plans",
+              "managed/dashboard"
             ]
           },
           {

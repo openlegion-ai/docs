@@ -27,7 +27,7 @@ agents:
       monthly_usd: 100.00
 ```
 
-When an agent exceeds its daily or monthly budget, subsequent LLM calls are rejected until the budget resets.
+Default budgets are $10/day and $200/month per agent. When an agent exceeds its daily or monthly budget, subsequent LLM calls are rejected until the budget resets.
 
 ## Viewing Costs
 
@@ -37,7 +37,7 @@ From the interactive REPL:
 /costs
 ```
 
-This shows today's spend per agent, including token counts and dollar amounts.
+This shows spend per agent for today, this week, and this month, including token counts and dollar amounts.
 
 ## Model Failover and Costs
 

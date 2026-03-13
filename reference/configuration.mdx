@@ -88,6 +88,7 @@ agents:
 | `budget.daily_usd` | float | Daily LLM spend cap |
 | `budget.monthly_usd` | float | Monthly LLM spend cap |
 | `thinking` | string | Extended thinking: `off` (default), `low`, `medium`, or `high` |
+| `system_prompt` | string | Custom system prompt override (replaces the default agent system prompt) |
 | `mcp_servers` | list | [MCP tool servers](/features/mcp) |
 
 ## `config/permissions.json` — Agent Permissions
@@ -119,6 +120,9 @@ Per-agent access control with glob patterns for blackboard paths and explicit al
 | `blackboard_write` | list | Glob patterns for writable blackboard keys |
 | `allowed_apis` | list | External APIs accessible through the vault |
 | `allowed_credentials` | list | Glob patterns for agent-tier credentials accessible to this agent |
+| `can_use_browser` | boolean | Access shared browser service (default: `false`) |
+| `can_spawn` | boolean | Spawn ephemeral fleet agents (default: `false`) |
+| `can_manage_cron` | boolean | Create/update/delete cron jobs (default: `false`) |
 
 Default policy is **deny** — agents can only do what's explicitly permitted.
 

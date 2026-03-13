@@ -1,26 +1,32 @@
 ---
 title: "OpenLegion"
-description: "Autonomous AI agent fleets — isolated, auditable, and production-ready"
+description: "Autonomous AI agent fleets — managed or self-hosted"
 ---
 
 ## What is OpenLegion?
 
-OpenLegion is a framework for running autonomous AI agent fleets in isolated Docker containers. Every agent gets its own memory, tools, schedule, and budget — coordinated through deterministic YAML workflows with no LLM routing layer.
+OpenLegion is a platform for running autonomous AI agent fleets. Every agent gets its own isolated Docker container with private memory, tools, schedule, and budget — coordinated through deterministic YAML workflows.
 
 API keys never leave the vault. Agents call through a proxy and never handle credentials directly. Chat with your fleet via **Telegram**, **Discord**, **Slack**, **WhatsApp**, or CLI. Monitor everything from a real-time web dashboard.
 
-**1,607 tests** across **~25,000 lines** of application code. Fully auditable in a day.
-No LangChain. No Redis. No Kubernetes. No CEO agent. BSL 1.1 License.
+No LangChain. No Redis. No Kubernetes. No CEO agent. 100+ LLM providers.
 
-<Card title="Quick Start" icon="rocket" href="/quickstart" horizontal>
-  Install OpenLegion and launch your first agent fleet in under 3 minutes.
-</Card>
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Managed Hosting" icon="cloud" href="/quickstart" horizontal>
+    Sign up at app.openlegion.ai and get a dedicated agent fleet running in minutes. No infrastructure to manage.
+  </Card>
+  <Card title="Self-Hosted" icon="server" href="/self-hosting" horizontal>
+    Clone the repo and run on your own machine. Full control, no account needed.
+  </Card>
+</CardGroup>
 
 ## Why OpenLegion?
 
-<Columns cols={2}>
+<CardGroup cols={2}>
   <Card title="Security by Architecture" icon="shield">
-    Every agent runs in an isolated Docker container (or microVM via `--sandbox`). API keys live in a credential vault — agents never see them. Defense-in-depth with 6 security layers.
+    Every agent runs in an isolated Docker container. API keys live in a credential vault — agents never see them. Defense-in-depth with 6 security layers.
   </Card>
   <Card title="Deterministic Orchestration" icon="diagram-project">
     YAML-defined DAG workflows with step dependencies, conditions, retries, and failure handlers. No LLM decides what runs next.
@@ -37,16 +43,16 @@ No LangChain. No Redis. No Kubernetes. No CEO agent. BSL 1.1 License.
   <Card title="100+ LLM Providers" icon="plug">
     Configurable model failover chains cascade across LLM providers with per-model health tracking and exponential cooldown via LiteLLM.
   </Card>
-</Columns>
+</CardGroup>
 
 ## Explore the docs
 
 <CardGroup cols={2}>
+  <Card title="Managed Hosting" icon="cloud" href="/managed/overview">
+    Dedicated VPS, custom subdomain, automatic provisioning, and subscription management.
+  </Card>
   <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
     Trust zones, mesh host, and agent containers.
-  </Card>
-  <Card title="Agent Tools" icon="toolbox" href="/reference/agent-tools">
-    41 built-in tools including browser automation, web search, and memory.
   </Card>
   <Card title="Workflows" icon="diagram-project" href="/features/workflows">
     Deterministic DAG workflows for multi-agent orchestration.
