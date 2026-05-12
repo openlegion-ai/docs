@@ -1,57 +1,80 @@
 ---
 title: "Agents"
-description: "How agents work inside their containers"
+description: "How agents work inside their containers — workers, the operator, subagents, and self-extending skills"
 icon: "robot"
 ---
 
-Each agent container runs a FastAPI server with endpoints for task assignment, chat, status, capabilities, and results.
+Each agent runs inside its own Docker container, serving a FastAPI app on `:8400` with endpoints for task assignment, chat, status, capabilities, and results. Every agent container listens on the same port — the mesh bridges across Docker IPs.
+
+## Workers vs the Operator
+
+Every agent is either a **worker** or **the operator** — the latter is a reserved agent ID auto-created at startup.
+
+| | Worker | Operator |
+|---|---|---|
+| Resources | 384MB RAM / 0.15 CPU | 128MB RAM / 0.05 CPU |
+| Tools | Granted via permissions | Operator-only tool surface (`fleet_tool`, `operator_tools`) plus standard tools |
+| Heartbeat | Configurable | Force-locked to `every 15m` |
+| Control-plane flags | Defaults `false` | Defaults `true` (manage fleet/projects/agents, view metrics, route tasks, request creds) |
+| Ceiling | n/a | Cannot grant `can_spawn=true` or `can_use_wallet=true` |
+
+In managed hosting the operator is your primary chat partner — the agent you talk to when you say "spin up a new researcher" or "what's my fleet doing today".
 
 ## Agent Container
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Agent Container                           │
-│                                                              │
-│  FastAPI Server (:8400)                                      │
-│    POST /task    POST /chat    POST /chat/reset               │
-│    GET /status   GET /result   GET /capabilities              │
-│    GET /workspace  GET|PUT /workspace/{file}                  │
-│    GET /heartbeat-context                                     │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐    │
-│  │                     AgentLoop                         │    │
-│  │                                                       │    │
-│  │  Task Mode: bounded 20-iteration loop                 │    │
-│  │  Chat Mode: conversational with tool use              │    │
-│  │                                                       │    │
-│  │  Both: LLM call -> tool execution -> context mgmt     │    │
-│  └──┬──────────┬──────────┬──────────┬──────────┬───────┘    │
-│     │          │          │          │          │             │
-│  ┌──▼───┐  ┌──▼───┐  ┌──▼──────┐ ┌─▼──────┐ ┌─▼─────────┐ │
-│  │ LLM  │  │ Mesh │  │ Skill   │ │Work-   │ │ Context   │ │
-│  │Client│  │Client│  │Registry │ │space   │ │ Manager   │ │
-│  │(mesh │  │(HTTP)│  │(builtins│ │Manager │ │(token     │ │
-│  │proxy)│  │      │  │+custom) │ │(/data/ │ │tracking,  │ │
-│  └──────┘  └──────┘  └─────────┘ │workspace│ │compact)   │ │
-│                                   └─────────┘ └───────────┘ │
+│                    Agent Container                          │
+│                                                             │
+│  FastAPI Server (:8400)                                     │
+│    POST /task    POST /chat    POST /chat/reset             │
+│    GET /status   GET /result   GET /capabilities            │
+│    GET /workspace  GET|PUT /workspace/{file}                │
+│    GET /heartbeat-context                                   │
+│                                                             │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │                     AgentLoop                         │  │
+│  │                                                       │  │
+│  │  Task Mode:    MAX_ITERATIONS=20                      │  │
+│  │  Chat Mode:    CHAT_MAX_TOOL_ROUNDS=30 per turn,      │  │
+│  │                CHAT_MAX_TOTAL_ROUNDS=200 per session, │  │
+│  │                _MAX_SESSION_CONTINUES=5               │  │
+│  │  Heartbeat:    HEARTBEAT_MAX_ITERATIONS=12            │  │
+│  │                                                       │  │
+│  │  All modes: LLM call -> tool execution -> context mgmt│  │
+│  └──┬──────────┬──────────┬──────────┬──────────┬───────┘  │
+│     │          │          │          │          │           │
+│  ┌──▼───┐  ┌──▼───┐  ┌──▼──────┐ ┌─▼──────┐ ┌─▼─────────┐  │
+│  │ LLM  │  │ Mesh │  │ Skill   │ │Work-   │ │ Context   │  │
+│  │Client│  │Client│  │Registry │ │space   │ │ Manager   │  │
+│  │(mesh │  │(HTTP)│  │(builtins│ │Manager │ │(token     │  │
+│  │proxy)│  │      │  │+custom) │ │(/data/ │ │tracking,  │  │
+│  └──────┘  └──────┘  └─────────┘ │workspace│ │compact)   │  │
+│                                  └─────────┘ └───────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ## Task Mode
 
-Accepts a `TaskAssignment` from the orchestrator. Runs a bounded loop (max 20 iterations) of **decide -> act -> learn**. Returns a `TaskResult` with structured output and optional blackboard promotions.
+Accepts a `TaskAssignment` from another agent or the operator. Runs a bounded loop (max 20 iterations, clamp 1–100 via `OPENLEGION_MAX_ITERATIONS`) of **decide -> act -> learn**. Returns a `TaskResult` with structured output and optional blackboard promotions.
 
-Task mode is used for workflow steps where an agent is given a specific objective with expected output.
+Task mode is used when an agent is given a specific objective with expected output — typically via the [coordination tool's](/features/coordination) `hand_off`.
 
 ## Chat Mode
 
-Accepts a user message. On the first message, loads workspace context (INSTRUCTIONS.md, SOUL.md, USER.md, MEMORY.md, SYSTEM.md, PROJECT.md) into the system prompt, injects a live Runtime Context block (permissions, budget, fleet, cron), and searches memory for relevant facts. Executes tool calls in a bounded loop (max 30 rounds) and runs context compaction when needed.
+Accepts a user message. On the first message, loads workspace context — **SOUL.md, INSTRUCTIONS.md, USER.md, MEMORY.md, HEARTBEAT.md, INTERFACE.md, AGENTS.md**, plus read-only **PROJECT.md** and **SYSTEM.md** — into the system prompt (total bootstrap injection cap **48K chars**), injects a live Runtime Context block (permissions, budget, fleet, cron), and searches memory for relevant facts.
 
-Chat mode is used for interactive conversations via CLI, Telegram, Discord, Slack, WhatsApp, or Webhooks.
+Per-turn cap: `CHAT_MAX_TOOL_ROUNDS=30` (clamp 1–200). Session-total cap: `CHAT_MAX_TOTAL_ROUNDS=200` (clamp 1–1000). Continuation prompts after a clean stop: `_MAX_SESSION_CONTINUES=5`.
+
+Chat mode is used for interactive conversations via CLI, Telegram, Discord, Slack, WhatsApp, or Webhook channels.
+
+## Heartbeat Mode
+
+When a cron with `heartbeat=true` fires, the agent runs at most `HEARTBEAT_MAX_ITERATIONS=12` iterations against an enriched context: HEARTBEAT.md rules, recent daily logs, probe alerts, and pending signal/task content. If the dispatch satisfies the **skip-LLM optimization**, the LLM is never called. See [Triggering & Automation](/features/triggering).
 
 ## Self-Extending Skills
 
-Agents can write their own Python skills at runtime using the `create_skill` tool and hot-reload them. Custom skills are Python functions decorated with `@skill`, auto-discovered from the agent's `skills_dir` at startup.
+Agents can write their own Python skills at runtime using the `create_skill` tool and hot-reload them via `reload_skills`. Candidates run through an AST validator with 23 forbidden imports, 16 forbidden calls, and 11 forbidden attribute accesses (size cap 10,000 chars).
 
 ```python
 @skill(
@@ -65,6 +88,8 @@ async def your_tool(param1: str, *, mesh_client=None) -> dict:
     return {"result": "value"}
 ```
 
+Custom skills are Python functions decorated with `@skill`, auto-discovered from the agent's `skills_dir` at startup.
+
 ## Self-Improving via Learnings
 
 Agents track tool failures in `learnings/errors.md` and user corrections in `learnings/corrections.md`. These are automatically injected into the system prompt each session, so agents avoid repeating past mistakes.
@@ -75,17 +100,21 @@ Both task and chat modes include automatic detection of stuck tool-call loops. A
 
 | Level | Trigger | Action |
 |-------|---------|--------|
-| **Warn** | 3rd identical call | System message: "Try a different approach" |
-| **Block** | 5th identical call | Tool skipped, error returned to agent |
-| **Terminate** | 10th call with same params | Loop terminated with failure status |
+| **Warn** | 2nd repeat | System message: "Try a different approach" |
+| **Block** | 4th repeat | Tool call skipped, error returned to agent |
+| **Terminate** | 9th repeat | Loop terminated with failure status |
 
-Memory retrieval tools (`memory_search`) are exempt since repeated searches are legitimate.
+Memory retrieval tools (`memory_search`) are exempt — repeated searches are legitimate.
 
-## Agent Spawning
+## Spawning Other Agents
 
-Agents have two ways to spawn helpers:
+Agents have two paths to create helpers:
 
-- **`spawn_agent`** — Creates a fully isolated container agent via the mesh host. Useful for tasks that need their own tools, memory, and security boundary.
-- **`spawn_subagent`** — Creates a lightweight in-process sub-agent. Faster startup but shares the parent's process. Sub-agents can nest up to depth 2 (a sub-agent can spawn its own sub-agents).
+- **`spawn_fleet_agent`** (from `skill_tool`) — creates a fully isolated container agent through the mesh host. Requires `can_spawn=true`, which **the operator cannot grant**. Useful for tasks that need their own tools, memory, and security boundary.
+- **`subagent_tool`** (`spawn` / `list` / `wait`) — creates a lightweight in-process subagent. Faster startup but shares the parent's process.
 
-**Subagent limits:** max 3 concurrent per parent, max nesting depth 2, max TTL 600s, max 10 iterations each.
+**Subagent limits:** `MAX_CONCURRENT=3` per parent, `MAX_DEPTH=2` (parent → subagent → sub-subagent, then stop), default TTL 300s (max 600s), `DEFAULT_MAX_ITERATIONS=10`. **Subagents cannot recurse beyond depth 2, cannot create skills, and cannot run browser tasks concurrently** (the browser tool holds module-level per-agent state).
+
+## Workspace Files
+
+Agents persist state at `/data/workspace/`. Caps and purpose are documented in detail in [Memory System](/features/memory) — the scaffold set is **SOUL.md** (4K), **INSTRUCTIONS.md** (12K), **USER.md** (4K), **MEMORY.md** (16K), **HEARTBEAT.md** (uncapped), **INTERFACE.md** (4K), with **AGENTS.md** (12K) at the engine root. **PROJECT.md** and **SYSTEM.md** are read-only bootstrap inclusions (SYSTEM.md 6K, auto-generated, refreshed every 5 min).

@@ -1,94 +1,120 @@
 ---
 title: "Architecture"
-description: "How agents, the mesh host, and trust zones work together"
+description: "How agents, the mesh host, the browser service, and trust zones work together"
 icon: "sitemap"
 ---
 
-OpenLegion separates concerns across three trust zones: untrusted external input, sandboxed agent containers, and a trusted mesh host that holds credentials and coordinates the fleet. All inter-agent communication flows through the mesh — no agent has direct network access or peer-to-peer connections.
+OpenLegion is a **container-isolated multi-agent runtime**. Agents run in isolated Docker containers; a single FastAPI **mesh host** on port 8420 holds credentials, routes inter-agent messages, enforces permissions, proxies LLM/API calls, reverse-proxies VNC, and serves the dashboard SPA. A separate **browser service container** on port 8500 hosts one Camoufox instance per agent on KasmVNC display slots.
+
+**Fleet model, not hierarchy. No CEO agent.** Users talk to agents directly. Agents coordinate through a SQLite blackboard, PubSub, lanes, and a structured handoff protocol — never through a master LLM that routes work.
 
 ## Overview
 
 ```
-User (CLI REPL / Telegram / Discord / Slack / WhatsApp / Webhook)
+User (CLI REPL / Telegram / Discord / Slack / WhatsApp / Webhook / Dashboard)
   -> Mesh Host (FastAPI :8420) — routes messages, enforces permissions, proxies APIs
-    -> Agent Containers (FastAPI :8400 each) — isolated execution with private memory
+    -> Agent Containers (FastAPI :8400 each) — isolated execution, private memory
+    -> Browser Service Container (FastAPI :8500) — per-agent Camoufox on KasmVNC 6100..6163
 ```
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                           User Interface                                │
-│                                                                         │
-│   CLI (click)          Webhooks            Cron Scheduler               │
-│   - setup              - POST /webhook/    - "0 9 * * 1-5"             │
-│   - start (REPL)         hook/{id}         - "every 30m"               │
-│   - stop / status      - Trigger agents    - Heartbeat pattern          │
-│   - agent add/list                                                      │
-└──────────────┬──────────────────┬──────────────────┬────────────────────┘
+│                           User Interface                                 │
+│                                                                          │
+│   CLI (click)          Webhooks            Cron Scheduler                │
+│   - start (REPL)       - POST /webhook/    - "0 9 * * 1-5" (5-field)     │
+│   - chat / status        hook/{id}         - "every 15m" (interval)      │
+│   - projects / tasks   - dashboard-only    - tick interval 5s            │
+│   - pending / confirm    creation          - heartbeat mode w/ skip-LLM  │
+└──────────────┬──────────────────┬──────────────────┬─────────────────────┘
                │                  │                  │
                ▼                  ▼                  ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                         Mesh Host (FastAPI)                              │
-│                         Port 8420 (default)                              │
-│                                                                         │
-│  ┌────────────┐ ┌─────────┐ ┌───────────┐ ┌────────────────────────┐   │
-│  │ Blackboard │ │ PubSub  │ │  Message   │ │   Credential Vault     │   │
-│  │ (SQLite)   │ │         │ │  Router    │ │   (API Proxy)          │   │
-│  │            │ │ Topics, │ │            │ │                        │   │
-│  │ Key-value, │ │ subs,   │ │ Permission │ │ LLM, Anthropic,       │   │
-│  │ versioned, │ │ notify  │ │ enforced   │ │ OpenAI, Apollo,        │   │
-│  │ TTL, GC    │ │         │ │ routing    │ │ Hunter, Brave Search   │   │
-│  └────────────┘ └─────────┘ └───────────┘ └────────────────────────┘   │
-│                                                                         │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐   │
-│  │ Orchestrator │ │  Permission  │ │  Container   │ │    Cost      │   │
-│  │              │ │  Matrix      │ │  Manager     │ │   Tracker    │   │
-│  │ DAG executor,│ │              │ │              │ │              │   │
-│  │ step deps,   │ │ Per-agent    │ │ Docker life- │ │ Per-agent    │   │
-│  │ conditions,  │ │ ACLs, globs, │ │ cycle, nets, │ │ token/cost,  │   │
-│  │ retry/fail   │ │ default deny │ │ volumes      │ │ budgets      │   │
-│  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘   │
+│                         Mesh Host (FastAPI :8420)                        │
+│                                                                          │
+│  ┌────────────┐ ┌─────────┐ ┌────────────┐ ┌────────────────────────┐    │
+│  │ Blackboard │ │ PubSub  │ │   Lanes    │ │   Credential Vault     │    │
+│  │ SQLite WAL │ │ topics, │ │ followup / │ │   (API proxy)          │    │
+│  │ atomic CAS │ │ subs,   │ │ steer /    │ │                        │    │
+│  │ via        │ │ fan-out │ │ collect    │ │ Two-tier prefixes:     │    │
+│  │ write_if_  │ │ notify  │ │ FIFO per   │ │ OPENLEGION_SYSTEM_*    │    │
+│  │ version,   │ │         │ │ agent      │ │ OPENLEGION_CRED_*      │    │
+│  │ audit/undo │ │         │ │            │ │ Opaque $CRED{name}     │    │
+│  └────────────┘ └─────────┘ └────────────┘ └────────────────────────┘    │
+│                                                                          │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐     │
+│  │ MessageRouter│ │  Permission  │ │  Container   │ │    Cost      │     │
+│  │ resolves     │ │  Matrix      │ │  Manager     │ │   Tracker    │     │
+│  │ agent ID or  │ │              │ │              │ │              │     │
+│  │ capability:* │ │ Per-agent    │ │ Docker life- │ │ Per-agent    │     │
+│  │ cross-       │ │ ACLs, globs, │ │ cycle, nets, │ │ + per-       │     │
+│  │ project      │ │ default deny │ │ volumes      │ │ project      │     │
+│  │ block        │ │              │ │              │ │ ledger       │     │
+│  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘     │
 └──────────────────────────────────────────────────────────────────────────┘
                │
-               │  Docker Network (bridge / host)
+               │  Docker bridge network
                │
-     ┌─────────┼──────────┬──────────────────────┐
-     ▼         ▼          ▼                      ▼
-┌─────────┐ ┌─────────┐ ┌─────────┐       ┌─────────┐
-│ Agent A │ │ Agent B │ │ Agent C │  ...  │ Agent N │
-│ :8401   │ │ :8402   │ │ :8403   │       │ :840N   │
-└─────────┘ └─────────┘ └─────────┘       └─────────┘
-  Each agent: isolated Docker container, own /data volume,
-  own memory DB, own workspace, 384MB RAM, 0.15 CPU default
+     ┌─────────┼──────────┬──────────────────────┬─────────────────┐
+     ▼         ▼          ▼                      ▼                 ▼
+┌─────────┐ ┌─────────┐ ┌─────────┐       ┌─────────┐       ┌──────────────┐
+│ Agent A │ │ Agent B │ │ Agent C │  ...  │ Agent N │       │ Browser      │
+│ :8400   │ │ :8400   │ │ :8400   │       │ :8400   │  ───▶ │ service      │
+└─────────┘ └─────────┘ └─────────┘       └─────────┘       │ :8500        │
+   (per-container port; mesh bridges across Docker IPs)     │ Camoufox per │
+                                                            │ agent on     │
+                                                            │ displays     │
+                                                            │ :100..:163   │
+                                                            │ paired KasmVNC│
+                                                            │ 6100..6163   │
+                                                            └──────────────┘
 ```
 
 ## Trust Zones
 
-| Level | Zone | Description |
-|-------|------|-------------|
-| 0 | **Untrusted** | External input (webhooks, user prompts). Sanitized before reaching agents. |
-| 1 | **Sandboxed** | Agent containers. Isolated filesystem, no external network, no credentials. |
-| 2 | **Trusted** | Mesh host. Holds credentials, manages containers, routes messages. |
+OpenLegion defines four trust zones plus a 2.5 operator-or-internal tier. Defense-in-depth: each zone has its own credential set, network policy, and entry conditions.
+
+| Level | Zone | Allowed actions |
+|-------|------|-----------------|
+| 0 | **Untrusted** | External input — webhook bodies (1MB cap), channel messages, user prompts. Sanitized via `sanitize_for_prompt()` before reaching agents. |
+| 1 | **Sandboxed (agents)** | Agent containers. UID 1000, `cap_drop=ALL`, `no-new-privileges`, read-only root FS, `tmpfs=/tmp` 100m noexec/nosuid. No LLM API keys — all provider calls proxy through mesh. |
+| 2 | **Trusted (mesh)** | Mesh host process. Holds credentials, manages containers, routes inter-agent messages. |
+| 2.5 | **Operator-or-internal** | `_require_operator_or_internal` gate. Fleet-wide metrics, per-agent metrics, stale-tasks, audit/archive endpoints. |
+| 3 | **Loopback-only** | Requires **both** `x-mesh-internal: 1` header **and** loopback IP. Caddy strips `x-mesh-internal` from inbound public traffic. |
 
 ## Mesh Host
 
 The mesh host is the central coordination layer — a single FastAPI process running on the host machine.
 
-### Blackboard (Shared State Store)
+### Blackboard
 
-SQLite-backed key-value store with versioning, TTL, and garbage collection.
+SQLite WAL key-value store with **atomic CAS via `write_if_version`** and an audit log that supports undo/archive. Keys are **auto-namespaced under `projects/{name}/`** so fleets in different projects can't collide.
 
 | Namespace | Purpose | Example |
 |-----------|---------|---------|
-| `tasks/*` | Task assignments | `tasks/research_abc123` |
+| `tasks/*` | Task assignments and handoffs | `tasks/researcher/h_abc123` |
 | `context/*` | Shared agent context | `context/prospect_acme` |
 | `signals/*` | Inter-agent signals | `signals/research_complete` |
 | `history/*` | Append-only audit log | `history/action_xyz` |
 
-### Credential Vault (API Proxy)
+### PubSub & Lanes
 
-Agents never hold API keys. All external API calls route through the mesh. The vault uses a two-tier prefix system: `OPENLEGION_SYSTEM_*` for LLM provider keys (never agent-accessible) and `OPENLEGION_CRED_*` for agent-tier tool/service keys. Budget limits are enforced before dispatching LLM calls and token usage is recorded after each response.
+PubSub fan-outs events to subscribers; both publish and subscribe are gated by `can_publish` / `can_subscribe`. **Lanes** are per-agent FIFO queues with three modes:
 
-When an agent needs a credential at runtime, it receives an opaque handle (`$CRED{name}`) instead of the raw secret. The handle is resolved by the mesh proxy at call time — the actual key never enters the agent container.
+- **`followup`** (default) — append-and-wake.
+- **`steer`** — inject into a busy agent's loop (rate-limited 10 wakeups / 3600s).
+- **`collect`** — batch messages while busy; drain on idle.
+
+`MessageRouter` resolves either a literal agent ID or `capability:<name>` to a container URL and blocks cross-project routing when `OPENLEGION_PROJECT_SCOPE_MODE=enforce`.
+
+### Credential Vault
+
+Agents never hold API keys. All external API calls route through the mesh. The vault uses a two-tier prefix system:
+
+- `OPENLEGION_SYSTEM_*` — LLM provider keys and other mesh-only secrets. Never agent-accessible.
+- `OPENLEGION_CRED_*` — agent-tier credentials. Access controlled per-agent via `allowed_credentials` (fnmatch glob, case-insensitive).
+
+At call time the agent receives an opaque handle (`$CRED{name}`) — the real value is substituted by the mesh proxy. The handle is the only thing visible inside the agent container.
 
 ### Model Failover
 
@@ -96,37 +122,50 @@ Configurable failover chains cascade across LLM providers transparently. `ModelH
 
 ### Permission Matrix
 
-Every inter-agent operation is checked against per-agent ACLs:
+Every inter-agent operation is checked against per-agent ACLs in `config/permissions.json`. **Default policy: deny**; missing file means deny-all.
 
 ```json
 {
   "researcher": {
-    "can_message": ["orchestrator"],
+    "can_message": ["analyst"],
     "can_publish": ["research_complete"],
     "can_subscribe": ["new_lead"],
     "blackboard_read": ["tasks/*", "context/*"],
     "blackboard_write": ["context/prospect_*"],
     "allowed_apis": ["llm", "brave_search"],
-    "allowed_credentials": ["brightdata_*"]
+    "allowed_credentials": ["brightdata_*"],
+    "can_use_browser": true
   }
 }
 ```
 
+Beyond messaging/blackboard/pub-sub, ACLs include `can_use_browser`, `browser_actions` (allowlist or `["*"]`), `can_spawn`, `can_manage_cron`, `can_use_wallet`, `wallet_allowed_chains`, `wallet_spend_limit_per_tx_usd`, `wallet_spend_limit_daily_usd`, `wallet_rate_limit_per_hour`, `wallet_allowed_contracts`, plus six control-plane flags (`can_manage_fleet`, `can_manage_projects`, `can_edit_agent_config`, `can_view_fleet_metrics`, `can_route_tasks`, `can_request_user_credentials`).
+
+### Operator (reserved role)
+
+A reserved agent ID, `operator`, is auto-created at startup. In managed hosting it is the user's primary chat partner — the agent that can manage your fleet on your behalf (apply templates, edit agents, archive projects, confirm hard edits). Resources are lighter than a worker: **128MB RAM, 0.05 CPU** (workers default to 384MB / 0.15 CPU). The operator has the control-plane flags listed above set to `true` by default.
+
+**Operator ceiling:** the operator cannot grant `can_spawn=true` or `can_use_wallet=true` to any agent. Those capabilities must be set by a human operator outside the chat surface.
+
 ### Container Manager
 
 Each agent runs in an isolated Docker container with:
-- **Image**: `openlegion-agent:latest` (Python 3.12, system tools — slim, no browser)
-- **Network**: Bridge with port mapping (macOS/Windows) or host network (Linux)
-- **Volume**: `openlegion_data_{agent_id}` mounted at `/data` (agent names with spaces/special chars are sanitized)
-- **Resources**: 384MB RAM limit, 0.15 CPU quota (configurable via `agents.yaml`)
-- **Security**: `no-new-privileges`, runs as non-root `agent` user (UID 1000), PID limit 256, read-only root filesystem, `cap_drop: ALL`, 100MB noexec tmpfs
-- **Ports**: 8400 (FastAPI)
 
-A separate shared **browser service container** (Camoufox + KasmVNC) runs with 2GB RAM, 1 CPU, and 512MB shared memory. All agents share this browser service. KasmVNC serves a live browser view on port 6080.
+- **Image**: `openlegion-agent:latest` (Python 3.12, slim, no Node.js).
+- **Network**: Docker bridge with port mapping (macOS/Windows) or host network (Linux).
+- **Volume**: `openlegion_data_{agent_id}` mounted at `/data` (names with spaces/special chars are sanitized).
+- **Resources (worker)**: 384MB RAM, 0.15 CPU quota, `pids_limit=256`.
+- **Resources (operator)**: 128MB RAM, 0.05 CPU quota.
+- **Security**: `no-new-privileges`, runs as UID 1000, read-only root filesystem, `cap_drop=ALL`, `tmpfs=/tmp` 100MB noexec/nosuid.
+- **Port**: every agent container listens on `:8400` internally. The mesh bridges across Docker IPs — there is no incrementing port-per-agent.
+
+A separate **browser service container** runs on `:8500` and hosts **one Camoufox per agent** on Xvnc displays `:100..:163` (64 slots) paired with **KasmVNC ports 6100..6163**. Resources scale with `OPENLEGION_MAX_AGENTS`: Basic (≤1 agent) 2GB/512MB/1.0 CPU; Growth (2–5) 4GB/1GB/1.5 CPU; Pro (6–15) 8GB/2GB/2.0 CPU; Pro Max (>15) 16GB/4GB/4.0 CPU. Note: `OPENLEGION_MAX_AGENTS=0` (the default for "unlimited") counter-intuitively maps to the Basic tier.
+
+The browser container has its own egress filter (iptables OUTPUT REJECTs RFC1918, loopback, link-local, CGNAT, and IANA-reserved IPv4+IPv6; allows in-container loopback; fail-closed). See [Security](/concepts/security).
 
 ### Projects
 
-Multi-project namespaces allow you to run separate agent fleets with isolated configuration. Each project gets its own `agents.yaml`, `permissions.json`, and auto-scoped blackboard — keys are automatically namespaced per project so fleets don't collide.
+Multi-project namespaces let you run separate agent fleets with isolated configuration. Each project has its own `agents.yaml`, `permissions.json`, and auto-scoped blackboard — keys are namespaced under `projects/{name}/` so fleets in different projects can't collide. `OPENLEGION_MAX_PROJECTS` (default unlimited) caps the number of projects.
 
 ## Design Principles
 
@@ -135,8 +174,9 @@ Multi-project namespaces allow you to run separate agent fleets with isolated co
 | Messages, not method calls | Agents communicate through HTTP/JSON. Never shared memory or direct invocation. |
 | The mesh is the only door | No agent has network access except through the mesh. No agent holds credentials. |
 | Private by default, shared by promotion | Agents keep knowledge private. Facts are explicitly promoted to the blackboard. |
-| Explicit failure handling | Every workflow step declares what happens on failure. No silent error swallowing. |
-| Small enough to audit | ~25,000 total lines. The entire codebase is auditable in a day. |
-| Skills over features | New capabilities are agent skills, not mesh or orchestrator code. |
-| SQLite for all state | Single-file databases. No external services. WAL mode for concurrent reads. |
+| Default deny, fail-closed | Permissions deny by default; SSRF and egress filters reject on DNS error or missing rule. |
+| Fleet model, not hierarchy. No CEO agent. | Coordination is blackboard + pub/sub + handoffs, not a master agent routing tasks. |
+| Small enough to audit | ~77,000 lines in `src/`. The runtime is auditable in a day. |
+| Skills over features | New capabilities are agent skills, not mesh-level code. |
+| SQLite for all state | Single-file databases. No Redis, no external services. WAL mode for concurrent reads. |
 | Zero vendor lock-in | LiteLLM supports 100+ providers. Markdown workspace files. No proprietary formats. |

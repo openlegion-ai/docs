@@ -1,83 +1,101 @@
 ---
 title: "Channels"
-description: "Connect agents to Telegram, Discord, Slack, WhatsApp, and more"
+description: "Connect agents to Telegram, Discord, Slack, WhatsApp, Webhook, and CLI"
 icon: "comments"
 ---
 
-Chat with your agent fleet via **Telegram**, **Discord**, **Slack**, **WhatsApp**, **Webhooks**, or **CLI**. Channels provide a unified interface for interacting with agents from any platform.
+Chat with your agent fleet via **CLI REPL**, **Telegram**, **Discord**, **Slack**, **WhatsApp**, or **Webhook**. Channels provide a unified interface for interacting with agents from any platform.
 
-## Connecting Channels
+## Activation: token-presence, not a flag
 
-Channels are configured through config files and environment variables (see [Channel Configuration](#channel-configuration) below). Enable a channel in `config/mesh.yaml` and set the corresponding API token environment variables.
+Channels auto-start as soon as the mesh resolves a usable token. There is no separate `enabled: true` flag — drop a token in and the channel comes up on next `openlegion start`. The mesh looks for each channel's bot token in this order:
 
-On next `openlegion start`, a pairing code appears — send it to your bot to link. The first user to interact becomes the channel owner and can manage access for other users.
+1. `OPENLEGION_SYSTEM_<NAME>` (mesh-tier env)
+2. `OPENLEGION_CRED_<NAME>` (agent-tier env)
+3. Bare env (e.g., `TELEGRAM_BOT_TOKEN`)
+4. `mesh.yaml` `channels.<name>.bot_token`
+
+## Pairing
+
+On startup, each active channel prints a one-time pairing code to the console. Send `/start <code>` from your account in that channel to claim the channel — the first user to pair becomes the channel owner. After pairing, the channel persists the owner mapping (e.g., `config/telegram_paired.json` for Telegram).
 
 ## Supported Channels
 
-| Channel | Setup | Features |
-|---------|-------|----------|
-| **CLI REPL** | Built-in | `@agent` mentions, `/commands`, broadcast |
-| **Telegram** | Bot token from @BotFather | Per-user agent routing, chunked messages |
-| **Discord** | Bot token from Discord Developer Portal | Per-user agent routing, chunked messages |
-| **Slack** | Bot token (Socket Mode — no webhooks needed) | Per-user agent routing, chunked messages |
-| **WhatsApp** | Access token + phone number ID from WhatsApp Cloud API | Per-user agent routing, chunked messages |
-| **Webhooks** | Webhook URL configuration in `config/mesh.yaml` | HTTP-based integration, event-driven |
-
-## How Channels Work
-
-All channels share a common base class that provides:
-- **@agent routing**: Mention an agent by name to direct your message
-- **Slash commands**: `/use`, `/agents`, `/status`, `/costs`, `/reset`, `/broadcast`
-- **Per-user routing**: Each user's messages route to their selected agent
-- **Message chunking**: Long responses are automatically split for platform limits
+| Channel | Auth | Notes |
+|---------|------|-------|
+| **CLI REPL** | Built-in | Default channel. Full slash command set (see [CLI Reference](/reference/cli)). |
+| **Telegram** | `OPENLEGION_CRED_TELEGRAM_BOT_TOKEN` | Bot API. **4000-char chunks**. Optional `allowed_users` list. |
+| **Discord** | `OPENLEGION_CRED_DISCORD_BOT_TOKEN` | **1900-char chunks**. Native slash commands + `!` prefix fallback. **`/addkey` is intentionally NOT a slash command** — slash-command arguments are visible in the channel transcript, so `!addkey` (bang-prefix) is used instead. Requires Message Content Intent + `bot` and `applications.commands` OAuth scopes. |
+| **Slack** | `OPENLEGION_CRED_SLACK_BOT_TOKEN` (`xoxb-`) **and** `OPENLEGION_CRED_SLACK_APP_TOKEN` (`xapp-`) | Socket Mode only (via `slack-bolt`). No public URL needed. **3000-char chunks**. Per-user routing keyed on `user_id:thread_ts`. |
+| **WhatsApp** | `OPENLEGION_CRED_WHATSAPP_ACCESS_TOKEN` + `_PHONE_NUMBER_ID` | Cloud API on Graph v21.0. **Text only — non-text content (images, audio, documents) is dropped silently.** See caveats below. |
+| **Webhook** | Dashboard-created hook | `POST /webhook/hook/<hook_id>`. Body cap 1MB; payload truncated to 3000 chars on dispatch. Optional HMAC-SHA256 via `x-webhook-signature`. **Creation is dashboard-only** — there is no `/mesh/webhooks` endpoint. |
 
 ## Channel Configuration
-
-Channels are configured in `config/mesh.yaml`:
-
-```yaml
-channels:
-  telegram:
-    enabled: true
-    default_agent: assistant
-  discord:
-    enabled: false
-    default_agent: assistant
-  slack:
-    enabled: false
-  whatsapp:
-    enabled: false
-```
 
 API tokens are stored as environment variables:
 
 ```bash
+# Telegram
 OPENLEGION_CRED_TELEGRAM_BOT_TOKEN=123456:ABC...
+
+# Discord
 OPENLEGION_CRED_DISCORD_BOT_TOKEN=MTIz...
+
+# Slack (both required)
 OPENLEGION_CRED_SLACK_BOT_TOKEN=xoxb-...
 OPENLEGION_CRED_SLACK_APP_TOKEN=xapp-...
+
+# WhatsApp
 OPENLEGION_CRED_WHATSAPP_ACCESS_TOKEN=EAAx...
 OPENLEGION_CRED_WHATSAPP_PHONE_NUMBER_ID=1234...
+WHATSAPP_APP_SECRET=...                        # REQUIRED in production
+OPENLEGION_SYSTEM_WHATSAPP_VERIFY_TOKEN=...    # strongly recommended
 ```
+
+Per-channel options (default agent, allowed users, etc.) live under `channels.<name>` in `config/mesh.yaml`:
+
+```yaml
+channels:
+  telegram:
+    default_agent: assistant
+    allowed_users: [12345678]
+  discord:
+    default_agent: assistant
+```
+
+## WhatsApp caveats
+
+WhatsApp is the channel with the most operational gotchas:
+
+- **Graph v21.0** Cloud API only.
+- **Text-only.** Inbound non-text messages (images, audio, documents, stickers, locations) are dropped — the agent never sees them.
+- **`WHATSAPP_APP_SECRET` is required in production.** The webhook handler verifies inbound payloads with HMAC-SHA256. **If `MESH_AUTH_TOKEN` is set and `WHATSAPP_APP_SECRET` is missing, the channel raises `RuntimeError` at startup** — it will not silently run unauthenticated.
+- The verify token **regenerates on every restart** unless you set `OPENLEGION_SYSTEM_WHATSAPP_VERIFY_TOKEN` explicitly. Set it so your Meta-side webhook config stays stable.
 
 ## Channel Commands
 
-These commands work across all channels:
+These commands work across all channels (CLI commands are documented in the [CLI Reference](/reference/cli)):
 
 | Command | Description |
 |---------|-------------|
 | `@agent <message>` | Send message to a specific agent |
-| `/use <agent>` | Switch your active agent |
-| `/agents` | List all running agents |
-| `/status` | Show agent health |
+| `/use <agent>` | Switch your active agent for this channel/user |
+| `/status` | Show fleet status |
 | `/costs` | Show today's LLM spend |
 | `/reset` | Clear conversation with active agent |
-| `/broadcast <msg>` | Send message to all agents |
-| `/steer <msg>` | Inject message into a busy agent's context |
-| `/debug` | Show recent request traces |
-| `/addkey <svc> [key]` | Add an API credential to the vault |
+| `/broadcast <msg>` | Send message to all agents (project-scoped in dashboard) |
+| `/steer <msg>` | Inject a message into a busy agent's context (rate-limited) |
+| `/addkey <svc> [key]` | Add an API credential to the vault (Discord: bang-prefix `!addkey`) |
 | `/help` | Show available commands |
+| `/quit`, `/exit` | (CLI only) leave the REPL |
 
-<Note>
-The following commands are available only in the CLI REPL: `/add`, `/agent`, `/edit`, `/remove`, `/restart`, `/history`, `/blackboard`, `/queue`, `/workflow`, `/cron`, `/project`, `/credential`, `/removekey`, `/logs`, `/traces`
-</Note>
+CLI-only commands (not available in messaging channels): `/add`, `/agent`, `/remove`, `/restart`, `/history`, `/blackboard`, `/queue`, `/cron`, `/project`, `/credential`, `/removekey`, `/logs`, `/traces` (alias `/debug`).
+
+## Per-channel routing semantics
+
+Routing semantics differ slightly per channel:
+
+- **Telegram / Discord**: per-user. Each user's messages route to the agent they've `/use`-d.
+- **Slack**: composite `user_id:thread_ts`. The same user gets a separate active-agent per thread.
+- **WhatsApp**: per-user, keyed on phone number.
+- **CLI**: single-user (the REPL session itself).

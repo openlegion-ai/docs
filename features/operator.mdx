@@ -1,0 +1,64 @@
+---
+title: "The Operator"
+description: "The reserved agent that manages your fleet on your behalf"
+icon: "user-tie"
+---
+
+`operator` is a reserved agent ID auto-created at startup. In managed hosting it is your primary chat partner — the agent you talk to when you say "spin up a new researcher", "what's my fleet doing today", or "apply the sales template".
+
+## What makes the operator different
+
+| | Worker agent | Operator |
+|---|---|---|
+| Resources | 384 MB RAM / 0.15 CPU | **128 MB RAM / 0.05 CPU** |
+| Heartbeat | Configurable | **Force-locked to `every 15m`** |
+| Control-plane flags | Default `false` | Default `true` (manage fleet/projects/agents, view metrics, route tasks, request creds) |
+| Tool surface | Standard tools + per-agent permissions | Standard tools + operator-only tools (`fleet_tool`, `operator_tools`) |
+| Auto-created | No | Yes — at engine startup, reserved ID |
+
+## Operator-only tools
+
+### `fleet_tool`
+
+- `list_templates` — see the 13 [fleet templates](/features/coordination#fleet-templates).
+- `apply_template` — materialize a template (per-slot, **not atomic** — mid-loop failures leave partial fleets).
+
+### `operator_tools`
+
+A broad control-plane surface:
+
+- **Inspection**: `inspect_agents`, `inspect_projects`, `list_pending`, `list_agent_queue`, `get_team_outputs`, `summarize_project_progress`.
+- **Project management**: `manage_project`, `create_project`, `add_agents_to_project`, `remove_agents_from_project`, `update_project_context`, `set_project_goal`.
+- **Agent management**: `manage_agent`, `create_agent`, `edit_agent` (soft/hard split with 5 min / 30 min TTL), `manage_task`.
+- **Edit lifecycle** (legacy): `propose_edit`, `confirm_edit`, `undo_change`, `cancel_pending_action`, `archive_audit_before`.
+- **Observation**: `save_observations` (operator-owned `OBSERVATIONS.md`).
+
+## Soft vs hard edits
+
+Operator edits to other agents split by risk:
+
+| Class | Fields | TTL | Confirmation |
+|-------|--------|-----|--------------|
+| **Soft** | `instructions`, `soul`, `heartbeat`, `heartbeat_schedule`, `interface`, `role` | 5 min | Auto-applied with Undo window |
+| **Hard** | `model`, `permissions`, `budget`, `thinking` | 30 min | Requires `confirm_edit` (CLI: `openlegion confirm <nonce>`) |
+
+Both soft and hard edits go through the **Pending actions** surface — visible in the dashboard's Needs-You panel and via `openlegion pending` on the CLI.
+
+## Operator ceiling
+
+The operator can do a lot, but **cannot**:
+
+- Grant `can_spawn=true` to any agent (subagent/agent spawning requires explicit human approval outside chat).
+- Grant `can_use_wallet=true` to any agent (wallet access requires the same).
+
+These ceilings are enforced in the permission matrix — even if the operator's own permissions are maxed out, those two fields are off-limits.
+
+## Where you'll see the operator
+
+- **CLI**: `openlegion start` opens the REPL with the operator selected by default. `/use operator` switches back.
+- **Channels**: Once paired, the operator is the default agent for new conversations.
+- **Dashboard**: The **Chat** tab targets the operator by default. **Settings → Operator** lets you edit its system prompts and instruction overrides.
+
+## Reserved IDs
+
+`operator` is one of three reserved agent IDs (`RESERVED_AGENT_IDS = {"mesh", "operator", "canary-probe"}`). You can't create a worker agent named `operator`, and the operator can't be deleted.

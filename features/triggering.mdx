@@ -8,30 +8,57 @@ Agents act autonomously through trigger mechanisms running in the mesh host (not
 
 ## Cron Scheduler
 
-Persistent cron jobs that dispatch messages to agents on a schedule. Agents can schedule their own jobs using the `set_cron` tool.
+Persistent cron jobs that dispatch to agents on a schedule. Agents can schedule their own jobs using `set_cron` (subject to `can_manage_cron`); `list_cron` and `remove_cron` round out the cron surface in `mesh_tool`.
 
-Supports:
-- **5-field cron expressions**: `minute hour dom month dow` (e.g., `0 9 * * 1-5` for weekdays at 9am)
-- **Interval shorthand**: `every 30s`, `every 30m`, `every 2h`, `every 1d`
-- **State persisted** to `config/cron.json`
+Supported formats:
+
+- **5-field cron expressions**: `minute hour dom month dow` (e.g., `0 9 * * 1-5` for weekdays at 9am). **Minute granularity only — 6-field cron with seconds is NOT supported.**
+- **Interval shorthand**: `every Ns`, `every Nm`, `every Nh`, `every Nd`.
+
+State is persisted to `config/cron.json` and auto-managed.
+
+<Note>
+The scheduler ticks every **5 seconds** (`TICK_INTERVAL=5s`). Intervals smaller than 5s won't fire faster than that.
+</Note>
+
+### Cron modes
+
+Every cron has one of three modes, set by which fields are present:
+
+- **Message mode** — dispatches a chat message to the agent. The agent runs an LLM turn to handle it.
+- **Tool mode** — fires `tool_name` with `tool_params` directly. **No LLM involvement**, useful for deterministic side-effects.
+- **Heartbeat mode** — runs the agent in heartbeat mode (`heartbeat=true`). See below.
+
+Updatable fields on an existing cron: `schedule`, `message`, `enabled`, `suppress_empty`, `tool_name`, `tool_params`. Other fields are immutable — remove and recreate.
 
 ## Heartbeat System
 
-Cost-efficient autonomous monitoring. Heartbeat jobs run cheap deterministic probes first — disk usage, pending signals, pending tasks — and only dispatch to the agent (costing LLM tokens) when probes detect something actionable.
+Cost-efficient autonomous monitoring. A heartbeat cron runs built-in probes first — cheap, deterministic checks — and only burns LLM tokens when something is actionable.
 
-This 5-stage architecture makes always-on agents economically viable:
+Built-in probes:
 
-1. **Scheduler** — triggers at the configured interval
-2. **Probes** — lightweight checks (no LLM cost)
-3. **Policy** — evaluates probe results against thresholds
-4. **Escalation** — dispatches to the agent only when needed
-5. **Action** — agent processes the alert with full LLM capabilities
+- `disk_usage` (fires when disk usage > **85%**)
+- `pending_signals` (any unread signals)
+- `pending_tasks` (any open handoffs)
 
-When a heartbeat fires, the agent receives enriched context: its HEARTBEAT.md rules, recent daily logs, probe alerts, and actual pending signal/task content — all in a single message. If HEARTBEAT.md is the default scaffold, no recent activity exists, and no probes triggered, the dispatch is skipped entirely (zero LLM cost).
+Default schedule: **`every 15m`**. The operator's heartbeat is **force-locked to `every 15m`** and cannot be changed.
+
+When a heartbeat fires, the agent receives an enriched context: its `HEARTBEAT.md` rules, recent daily logs, probe alerts, and actual pending signal/task content — all in a single message. Iterations are capped at `HEARTBEAT_MAX_ITERATIONS=12`.
+
+### Skip-LLM optimization
+
+The dispatcher will skip the LLM entirely when **all four** of these conditions hold:
+
+1. Not a manual trigger (manual `/cron run` always dispatches).
+2. `HEARTBEAT.md` is the default scaffold (unmodified).
+3. No recent activity exists.
+4. No probes triggered.
+
+When all four hold, the heartbeat returns immediately at zero LLM cost. Any single condition flips and the LLM is called.
 
 ## Webhook Endpoints
 
-Named webhook URLs that dispatch payloads to agents:
+Named webhook URLs dispatch payloads to agents:
 
 ```bash
 curl -X POST http://localhost:8420/webhook/hook/hook_a1b2c3d4 \
@@ -39,24 +66,15 @@ curl -X POST http://localhost:8420/webhook/hook/hook_a1b2c3d4 \
   -d '{"event": "push", "repo": "myproject"}'
 ```
 
-Webhooks can also trigger [workflows](/features/workflows).
+Notes:
 
-### Direct Workflow Trigger
-
-Trigger a workflow by name using a dedicated endpoint:
-
-```bash
-curl -X POST http://localhost:8420/webhook/trigger/prospect_pipeline \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $WEBHOOK_SECRET" \
-  -d '{"company": "Acme Corp"}'
-```
-
-This endpoint requires the `WEBHOOK_SECRET` environment variable to be set for authentication.
+- **Webhook creation is dashboard-only.** There is no `/mesh/webhooks` endpoint — open the dashboard (**Settings → Integrations**) to create a hook and get its `hook_id`.
+- **Body cap 1 MB** (Content-Length pre-check + post-read check). Payload is **truncated to 3000 chars** when forwarded to the agent, and run through `sanitize_for_prompt()` first.
+- **Optional HMAC-SHA256** via `x-webhook-signature`. If a secret is configured on the hook, the dispatcher verifies via `hmac.compare_digest`.
 
 ## File Watchers
 
-Poll directories for new/modified files matching glob patterns. Uses polling (not inotify) for Docker volume compatibility.
+Poll directories for new or modified files matching glob patterns. **Polling, not inotify** — required for Docker volume compatibility.
 
 ```yaml
 # config/watchers.yaml
@@ -66,3 +84,6 @@ watchers:
     agent: "researcher"
     message: "New prospect list uploaded: {filename} at {filepath}. Begin research."
 ```
+
+- Poll interval: **5s** (`POLL_INTERVAL=5s`, not user-configurable).
+- **First scan is silent.** Files present at watcher startup do **not** trigger the agent — only files added or modified after the watcher comes up. This avoids replaying every existing file on restart.
