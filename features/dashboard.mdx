@@ -4,40 +4,93 @@ description: "Real-time web UI for monitoring and managing your agent fleet"
 icon: "gauge"
 ---
 
-OpenLegion includes a built-in web dashboard for real-time monitoring, debugging, and management of your agent fleet. The dashboard is served by the mesh host and available at `http://localhost:8420/dashboard`.
+<Note>
+This page documents the **engine dashboard** — the Alpine.js SPA served by the mesh host on `:8420`. For the managed-hosting account dashboard (Next.js, Vercel), see the Managed Hosting docs.
+</Note>
 
-## Panels
+OpenLegion includes a built-in web dashboard for real-time monitoring, debugging, and management of your agent fleet. The dashboard is served by the mesh host at `http://localhost:8420/`.
 
-### Fleet (tab)
+## Top-nav tabs
 
-Agent cards showing health status, current model, token usage, and cost. Organized by projects. Click an agent to open a detail view with workspace editor and embedded VNC viewer for live browser sessions.
+There are **four top-level tabs**. Internal IDs are frozen for URL stability; user-facing labels diverged:
 
-Slide-over chat panels let you chat with any agent directly from the dashboard via SSE streaming — no need to switch to the CLI or a messaging channel.
+| Internal ID | Label | Purpose |
+|---|---|---|
+| `chat` | **Chat** | Multi-agent chat surface streamed via the chat endpoint |
+| `workplace` | **Work** | Kanban board, Needs-You panel, activity feed, recently delivered |
+| `fleet` | **Team** | Agent grid — health, model, token usage, cost. Click for detail view + workspace editor + embedded VNC |
+| `system` | **Settings** | 11 sub-tabs (see below) |
 
-### Activity (tab)
+<Note>
+The Work tab's Kanban surface is sometimes described as a "Board" in prose. That's a description, not a tab label — the tab is **Work**.
+</Note>
 
-- **Traces** — Grouped request traces showing the full lifecycle of each agent interaction, including LLM prompts, responses, tool calls, and timing. LLM prompt/response previews for quick debugging.
-- **Live Events** — WebSocket-streamed event feed showing real-time activity across the fleet. Filter by event type (task assignments, pub/sub events, blackboard updates, etc.).
-- **Blackboard** — Browse, search, write, and delete entries in the shared blackboard. See the current state of inter-agent shared data.
-- **Costs** — Per-agent spending breakdown with period selector (today, this week, this month). Budget bars show how much of each agent's allocation has been used.
-- **Automation** — Manage cron jobs and scheduled tasks. Run, pause, resume, edit, or delete automation from the UI.
+### Chat
 
-Broadcast is project-scoped — messages are sent to all agents within the selected project.
+Multi-agent chat. Talk to one agent or fan a message out to several at once. Token-level streaming via the chat endpoint; events bypass the WS event bus for low-latency delivery.
 
-### System (tab)
+### Work
 
-View configured credentials (names only — values are never exposed), pub/sub subscriptions, and model pricing.
+Operational workspace. Surfaces include:
 
-### Keyboard Command Palette
+- **Kanban** — Pending / Working / Blocked / Done columns.
+- **Needs-You** panel — pending operator actions (soft/hard edits awaiting confirm).
+- **Activity feed** with pinned blockers.
+- **Recently delivered** — inline previews of recent agent outputs.
 
-Quick access to dashboard actions via a keyboard command palette for power users.
+### Team
+
+Agent grid showing health, current model, token usage, and cost — organized by project. Click an agent to open a detail view with workspace editor and embedded VNC viewer for live browser sessions. Slide-over chat panels let you chat with any agent directly via SSE streaming.
+
+### Settings (System) — 11 sub-tabs
+
+The Settings tab is the operational control surface. It has 11 sub-tabs:
+
+| Sub-tab | Purpose |
+|---------|---------|
+| **Activity** | Traces, live events, blackboard browser |
+| **Costs** | Per-agent + per-project cost breakdowns with period selector |
+| **Automation** | Cron jobs, heartbeats, file watchers |
+| **Integrations** | Webhooks, channel pairing, MCP servers |
+| **API Keys** | Engine API keys (salted SHA-256 hashes) for programmatic access |
+| **Wallet** | Wallet addresses, balances, spend limits (per chain) |
+| **Network** | Egress allowlist, browser proxy config, no-proxy list |
+| **Storage** | Data volumes, project archives, exports |
+| **Operator** | Operator agent settings — system prompts, instruction overrides |
+| **Browser** | Browser service flags (device profile, locale, UA, CAPTCHA solver) |
+| **Settings** | Misc runtime overrides, model defaults |
+
+#### Activity sub-tab specifics
+
+- **Traces** — grouped request traces showing the full lifecycle of each agent interaction. LLM prompt/response previews surfaced inline for quick debugging.
+- **Live Events** — WebSocket feed at `/ws/events`. `DashboardEvent.type` is a Literal of **50 event names** (task assignments, pub/sub fan-outs, blackboard updates, cron fires, channel messages, browser events, etc.). The event bus is a **500-event ring buffer**. Per-token `text_delta` events bypass the WS bus and are delivered via the streaming chat endpoint instead.
+- **Blackboard** — browse, search, write, and delete entries in the shared blackboard. See current inter-agent shared data.
+
+## Real-time updates
+
+- WebSocket: `/ws/events` (500-event ring buffer; 50 typed event names).
+- SSE: per-agent chat streams.
+- Token-level streaming bypasses the WS bus for low latency.
+
+## Live browser viewers
+
+Click any agent with browser activity to see a live VNC view. The dashboard proxies through `/agent-vnc/{agent_id}/{path}`. The proxy **rejects agent Bearer tokens** and **requires the `ol_session` cookie on both HTTP and WebSocket upgrade** — agent credentials can't leak through a browser session.
 
 ## Accessing the Dashboard
 
-The dashboard starts automatically with `openlegion start`. No additional configuration is needed.
+The dashboard starts automatically with `openlegion start`. No additional configuration needed on a self-hosted install.
 
 ```
-http://localhost:8420/dashboard
+http://localhost:8420/
 ```
 
-The dashboard uses Alpine.js and Tailwind CSS, served as static assets from the mesh host. Real-time updates are streamed via WebSocket and SSE.
+**Authentication:**
+
+- **Dev / self-hosted** — open by default if `/opt/openlegion/.access_token` is absent.
+- **Managed hosting** — gated by an `ol_session` cookie (HMAC-verified, 24h max age + 5-min skew). The SSO callback `/__auth/callback` lives in the upstream Caddy auth-gate sidecar, **not** in engine code — the engine only consumes the cookie.
+
+**CSRF:** state-changing dashboard endpoints require the `X-Requested-With` header. If you're calling dashboard APIs programmatically, set it.
+
+## Tech stack
+
+Alpine.js SPA + Tailwind CSS via CDN — **no build step**. Jinja templates with `autoescape=True` (the primary XSS defense, since the CSP allows `unsafe-inline`). Real-time updates over WebSocket and SSE.

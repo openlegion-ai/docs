@@ -1,0 +1,76 @@
+---
+title: "Wallet"
+description: "Per-agent EVM and Solana keys with spend caps, rate limits, and one-time seed reveal"
+icon: "wallet"
+---
+
+OpenLegion's wallet system gives each agent its own deterministically-derived blockchain keypair on **5 EVM chains and 2 Solana networks**. Keys are derived from a single master mnemonic stored in the mesh-tier vault — agents never see the seed or raw private keys.
+
+## Supported chains
+
+| Family | Networks |
+|--------|----------|
+| EVM | `evm:ethereum`, `evm:base`, `evm:arbitrum`, `evm:polygon`, `evm:sepolia` |
+| Solana | `solana:mainnet`, `solana:devnet` |
+
+## Per-agent key derivation
+
+- **EVM**: BIP-44 path `m/44'/60'/{agent_index}'/0/0` from the master seed.
+- **Solana**: HMAC-SHA512 over PBKDF2 of the seed, keyed by `agent_index`.
+- **Private keys never leave the mesh process.** The wallet tool calls into the mesh to sign — agents only see signed transactions and addresses.
+
+## Operations
+
+`wallet_tool` exposes five functions (subject to `can_use_wallet` ACL):
+
+| Tool | Purpose |
+|------|---------|
+| `get_address` | Get the agent's address for a given chain |
+| `get_balance` | Get native or token balance |
+| `read_contract` | View call (no signing, no spend) |
+| `transfer` | Native or ERC-20/SPL token transfer |
+| `execute` | Sign and submit an arbitrary protocol transaction |
+
+## Master seed: one-time reveal
+
+The master mnemonic (24-word BIP-39) is generated once and stored in `OPENLEGION_SYSTEM_WALLET_MASTER_SEED`.
+
+You see it **exactly once**:
+
+- `POST /api/wallet/init` returns the seed with `Cache-Control: no-store`.
+- Every subsequent call to `GET /api/wallet/seed` returns **HTTP 410 Gone**. There is no second-chance reveal.
+- The CLI command `openlegion wallet init` shows the seed once on stdout.
+
+Back up the seed when you initialize. The engine intentionally does not let you re-read it.
+
+## Spend limits and rate limits
+
+ACLs enforce four wallet-specific caps per agent:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `wallet_spend_limit_per_tx_usd` | `LIMIT_PER_TX_USD=10` | Max USD value per transaction |
+| `wallet_spend_limit_daily_usd` | `LIMIT_DAILY_USD=100` | Max USD per agent per UTC day |
+| `wallet_rate_limit_per_hour` | `RATE_LIMIT_PER_HOUR=10` | Max transactions per agent per hour |
+| `wallet_allowed_chains` | (per-agent allowlist) | Restrict which chains an agent can sign on |
+| `wallet_allowed_contracts` | (per-agent allowlist) | Restrict which contract addresses `execute` can target |
+
+USD values are estimated from oracle prices at submit time and counted against the daily cap.
+
+## Operator ceiling
+
+The operator agent **cannot grant `can_use_wallet=true`**. Wallet access for an agent must be set explicitly by a human operator outside the chat surface — usually by editing `config/permissions.json` directly.
+
+## CLI
+
+```bash
+# Initialize the master seed (shown ONCE)
+openlegion wallet init
+
+# Show addresses for an agent across all chains
+openlegion wallet show researcher
+```
+
+## Dashboard
+
+The **Settings → Wallet** sub-tab lists every agent's addresses on every chain along with current balances and the per-agent caps configured in permissions.

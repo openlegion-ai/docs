@@ -40,10 +40,13 @@
             "group": "Features",
             "pages": [
               "features/agents",
+              "features/operator",
               "features/coordination",
               "features/memory",
               "features/triggering",
               "features/channels",
+              "features/browser",
+              "features/wallet",
               "features/dashboard",
               "features/mcp",
               "features/cost-tracking"

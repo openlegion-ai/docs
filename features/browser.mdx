@@ -1,0 +1,95 @@
+---
+title: "Browser Automation"
+description: "Per-agent stealth Firefox, 24 browser actions, CAPTCHA solving, sessions, and fingerprint burn"
+icon: "globe"
+---
+
+OpenLegion ships a per-agent stealth browser stack: a separate **browser service container** on `:8500` hosts one **Camoufox** (stealth Firefox fork) instance per agent, lazy-spawned on Xvnc displays `:100..:163` (64 slots) paired with KasmVNC ports 6100..6163. Agents drive the browser through `browser_tool` over HTTP.
+
+## 24 browser actions
+
+`browser_tool` exposes 24 `@skill` tools. All actions are `parallel_safe=False` per agent — the browser tool holds module-level per-agent state, so a single agent's actions are serialized.
+
+| Category | Actions |
+|---|---|
+| Navigation | `navigate`, `warmup`, `go_back`, `go_forward`, `reset`, `wait_for` |
+| Inspection | `get_elements` (a11y snapshot, 200-element cap, iframe nesting cap 3), `screenshot` (WebP default), `find_text` |
+| Interaction | `click`, `click_xy`, `type`, `hover`, `scroll`, `press_key`, `fill_form` (max 50 fields) |
+| Tabs | `open_tab`, `switch_tab` |
+| Network | `inspect_requests` (200-event buffer) |
+| Files | `upload_file` (max 5 files, 50MB each), `download` |
+| CAPTCHA / Login | `detect_captcha`, `solve_captcha`, `request_captcha_help`, `request_browser_login` |
+
+Permissions are gated by `can_use_browser` and an optional `browser_actions` allowlist (`None`/`["*"]` = all known actions, `[]` = deny, specific list = allowlist of these names).
+
+## CAPTCHA solving
+
+CAPTCHA solving is integrated into the browser tool:
+
+- **Providers**: 2captcha and capsolver (configured via env-only flags — these credentials bypass the standard vault).
+- **Supported types**: reCAPTCHA v2/v3/enterprise, hCaptcha, Cloudflare Turnstile + interstitial, PerimeterX press-hold, DataDome, JavaScript challenges.
+- **Behavioral CAPTCHAs** (drag puzzles, image selection) are rejected — they must route to `request_captcha_help` for human-in-the-loop solving.
+- **Costs** are tracked in **millicents (1/100,000 USD)** in `data/captcha_costs.json`. See [Cost Tracking](/features/cost-tracking).
+- **Rate limit**: 20/hour per agent (default).
+- **Caps**: per-agent + per-tenant monthly USD caps with 50% / 80% / 100% alerts.
+- **Kill switch**: `CAPTCHA_DISABLED` halts all solving fleet-wide.
+- **Provider circuit breaker**: 3 failures in 5 minutes opens the breaker for 10 minutes.
+
+## Session persistence
+
+**Opt-in.** Disabled by default — set `BROWSER_SESSION_PERSISTENCE_ENABLED=true` to enable. When on, the browser service snapshots cookies, storage, and IndexedDB on an interval (default 300s, range 60–3600s). On agent restart the session resumes from the latest snapshot.
+
+## Device profiles
+
+Four built-in profiles:
+
+- `desktop-windows` (default)
+- `desktop-macos`
+- `mobile-ios`
+- `mobile-android`
+
+<Warning>
+**Mobile profiles spoof the User-Agent string only.** The underlying Camoufox Firefox engine is unchanged — TLS/JA3 fingerprints remain desktop, and Firefox does not send `Sec-CH-UA-*` Client Hints. Sites that fingerprint at the TLS layer can still detect a desktop client.
+</Warning>
+
+## Fingerprint burn detection
+
+The browser tool maintains a rolling window of the last 10 navigation outcomes. If **≥50% of recent navigations get rejected** (challenge pages, bans, anti-bot redirects), the per-agent flag `fingerprint_burn=True` is set.
+
+**There is no automatic rotation.** The operator must explicitly rotate the device profile and reset the session.
+
+## Canary
+
+`canary-probe` is a reserved agent ID that, when enabled (`BROWSER_CANARY_ENABLED=true`), sweeps test surfaces for fingerprint detectability. Useful as an early-warning signal for fingerprint burn across the fleet.
+
+## Operator kill switches
+
+The operator can flip any of these env-driven flags to halt risky browser surfaces fleet-wide:
+
+| Flag | Effect |
+|------|--------|
+| `BROWSER_DOWNLOADS_DISABLED` | Block `download` action |
+| `BROWSER_NETWORK_INSPECT_DISABLED` | Block `inspect_requests` |
+| `BROWSER_COOKIE_IMPORT_DISABLED` | Block cookie import flows |
+| `CAPTCHA_DISABLED` | Halt all CAPTCHA solving |
+
+## Browser service container
+
+Resources scale with `OPENLEGION_MAX_AGENTS`:
+
+| Tier | Max agents | RAM | Shared mem | CPU |
+|------|-----------|-----|-----------|-----|
+| Basic | ≤1 | 2 GB | 512 MB | 1.0 |
+| Growth | 2–5 | 4 GB | 1 GB | 1.5 |
+| Pro | 6–15 | 8 GB | 2 GB | 2.0 |
+| Pro Max | >15 | 16 GB | 4 GB | 4.0 |
+
+<Note>
+`OPENLEGION_MAX_AGENTS=0` (the default "unlimited") falls into the **Basic** tier. If you intend to run many agents, set the variable explicitly.
+</Note>
+
+The container has its own iptables egress filter: REJECTs RFC1918, loopback (except in-container), link-local, CGNAT, and IANA-reserved IPv4+IPv6. Fail-closed. See [Security](/concepts/security).
+
+## Live browser viewer
+
+Every browser session has a KasmVNC view at port `6100 + display_offset`. The dashboard proxies these through `/agent-vnc/{agent_id}/{path}` — the proxy rejects agent Bearer tokens and requires `ol_session` on HTTP and WebSocket, so an agent's credentials can't leak through the browser viewer.

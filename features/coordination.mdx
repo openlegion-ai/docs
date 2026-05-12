@@ -1,0 +1,117 @@
+---
+title: "Coordination"
+description: "How agents collaborate without a CEO agent — blackboard, pub/sub, lanes, and handoffs"
+icon: "diagram-project"
+---
+
+OpenLegion is a **fleet model — blackboard + pub/sub + handoff (no CEO agent)**. There is no LLM in the middle deciding what runs next. Agents coordinate through four explicit primitives, all running on the mesh host:
+
+- **Blackboard** — durable shared state in SQLite WAL.
+- **PubSub** — fan-out events.
+- **Lanes** — per-agent FIFO queues.
+- **Handoffs** — durable task records routed through `MessageRouter`.
+
+Templates assemble agents into ready-made rosters. There are no DAG YAML files and no deterministic orchestrator.
+
+## Blackboard
+
+A SQLite WAL key-value store with **atomic CAS via `write_if_version`** and an audit log that supports undo and archive. Keys are auto-namespaced under `projects/{name}/` so fleets in different projects can't collide.
+
+Tools on `mesh_tool`:
+
+| Tool | Purpose |
+|------|---------|
+| `write_blackboard` | CAS-aware write (`version` arg) |
+| `read_blackboard` | Read a key (returns value + version) |
+| `list_blackboard` | List keys under a glob |
+| `watch_blackboard` | Long-poll for changes |
+| `claim_task` | CAS-based claim — used internally by handoffs |
+| `save_artifact` | Promote a tool result to a durable artifact |
+
+Typical namespaces: `tasks/*` (handoffs), `context/*` (shared context), `signals/*` (one-shot signals), `history/*` (append-only audit log).
+
+## Pub/Sub
+
+Fan-out topic bus. Both publishing and subscribing are permission-gated by `can_publish` / `can_subscribe`.
+
+| Tool | Purpose |
+|------|---------|
+| `publish_event` | Publish a payload to a topic |
+| `subscribe_event` | Long-poll the topic queue |
+
+Use pub/sub for fire-and-forget signals ("research is done", "new lead came in") rather than work assignment — for work, use handoffs.
+
+## Lanes
+
+Each agent has a per-agent FIFO lane on the mesh. Messages routed into a lane wake the agent up; results are forwarded with a `MessageOrigin` carrying `kind` / `channel` / `user` so the reply can flow back to the requester.
+
+Lanes support three modes:
+
+- **`followup`** (default) — append and wake.
+- **`steer`** — inject into a busy agent's loop. Rate-limited to **10 wakeups / 3600s** to avoid thrashing.
+- **`collect`** — batch messages while the agent is busy; deliver the whole batch when it goes idle.
+
+## Handoffs (`coordination_tool`)
+
+Structured task assignment between agents. All four functions are part of the `coordination_tool`:
+
+| Tool | Purpose |
+|------|---------|
+| `hand_off` | Send a task to another agent (or `capability:<name>`). TTL **86400s** (24h). |
+| `check_inbox` | List inbound handoffs |
+| `update_status` | Update task status (`working`, `blocked`, `done`) |
+| `complete_task` | Mark a task complete and deliver the result |
+
+`MessageRouter` resolves the target — either a literal agent ID or `capability:<name>` (routes to whichever agent declares that capability). Cross-project routing is blocked when `OPENLEGION_PROJECT_SCOPE_MODE=enforce`.
+
+### V1 vs V2 task records
+
+Handoffs run in one of two backends:
+
+- **V1** — handoff is stored as a blackboard entry at `tasks/{agent}/{handoff_id}`. Lightweight, no durable record outside the blackboard.
+- **V2** — durable task records in a separate table; surface via the `openlegion tasks` CLI command. Enabled when `OPENLEGION_ORCHESTRATION_TASKS_V2=1` — **default ON in v0.1.0**.
+
+V2 is the recommended mode. Set the env var to `0` only if you specifically need the old blackboard-backed behavior.
+
+## Fleet Templates
+
+Templates are agent rosters — YAML manifests in `src/templates/` that the operator can apply to materialize a fleet. There are **13 templates** in the engine today:
+
+| Template | Composition |
+|----------|-------------|
+| `starter` | Single general-purpose assistant |
+| `content` | researcher + writer (blog / social / email from briefs) |
+| `deep-research` | scout + analyst (multi-source synthesis with citations) |
+| `devteam` | PM, engineer, reviewer |
+| `monitor` | watcher + analyst (always-on) |
+| `sales` | researcher, qualifier, outreach |
+| `competitive-intel` | competitor pricing/product tracking |
+| `lead-enrichment` | lead list research |
+| `price-intelligence` | crawler + analyst with anti-bot browser |
+| `review-ops` | G2 / Trustpilot / Capterra / App Store / Google reviews + reply drafts |
+| `social-listening` | Reddit / HN / X competitor pain-point monitor |
+| `research` | general-purpose researcher |
+| `opportunity-finder` | gap-scout + evaluator + modeler |
+
+Templates use a `"{default_model}"` placeholder which is substituted at apply time.
+
+### `apply_template` is per-slot, not atomic
+
+`fleet_tool` (operator-only) exposes `list_templates` and `apply_template`. `apply_template` accepts `agent_overrides` per-slot — `model`, `instructions` (≤12K), `soul` (≤4K), `heartbeat`, `interface` (≤4K). The `role` is template-fixed and cannot be overridden.
+
+**Important: `apply_template` is per-slot and NOT atomic.** If the template has 4 slots and slot 3 fails, agents from slots 1 and 2 stay created. You must clean up partially-applied fleets yourself.
+
+## MessageOrigin
+
+Every message — chat input from a channel, a handoff, a lane delivery — carries a `MessageOrigin` Pydantic model with `kind` / `channel` / `user`. Results flow back along the same path: a Telegram message routed to a researcher and then handed off to a writer eventually returns to the original Telegram user, with no extra plumbing required from the agent code.
+
+## Coordination at a Glance
+
+| Need | Use |
+|------|-----|
+| Durable shared state | Blackboard (`write_blackboard` with CAS) |
+| One-shot broadcast | Pub/Sub (`publish_event`) |
+| Append-and-wake another agent | Lane via `followup` |
+| Interrupt a busy agent | Lane via `steer` (rate-limited) |
+| Hand off a task with a result expectation | `hand_off` (V2 durable record) |
+| Spin up a multi-agent fleet | `fleet_tool.apply_template` (operator-only) |

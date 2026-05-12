@@ -1,25 +1,36 @@
 ---
 title: "Security Model"
-description: "Defense-in-depth with six layers of protection"
+description: "Defense-in-depth across trust zones, hardening, vault, validation, and egress"
 icon: "shield"
 ---
 
-OpenLegion was designed from day one assuming agents will be compromised. The security model provides defense-in-depth with six layers.
+OpenLegion was designed assuming agents will be compromised. The security model is **defense-in-depth**: trust zones gate what each component can touch, agent containers are hardened, credentials are isolated, every cross-boundary call is permission-checked, and the browser service has its own egress filter. **Default deny. Fail-closed.**
 
-## Six Security Layers
+## Trust Zones
 
-| Layer | Mechanism | What It Prevents |
+Four zones plus a 2.5 operator-or-internal tier (mirrors the table in [Architecture](/concepts/architecture)):
+
+| Level | Zone | Notes |
+|-------|------|-------|
+| 0 | **Untrusted** | External input. Webhook bodies 1MB cap, optional HMAC-SHA256, all messages sanitized via `sanitize_for_prompt()`. |
+| 1 | **Sandboxed (agents)** | Hardened agent containers (see below). Hold no LLM keys — proxy through mesh. |
+| 2 | **Trusted (mesh)** | Mesh host. Holds credentials, manages containers, routes messages. |
+| 2.5 | **Operator-or-internal** | `_require_operator_or_internal` gate on fleet-wide metrics, per-agent metrics, stale tasks, audit/archive endpoints. |
+| 3 | **Loopback-only** | Requires both `x-mesh-internal: 1` header **and** loopback IP. Caddy strips the header from inbound public traffic on managed VPSes. |
+
+## Defense-in-Depth Layers
+
+| Layer | Mechanism | What it prevents |
 |-------|-----------|-----------------|
 | Runtime isolation | **Docker containers** (default) or **Docker Sandbox microVMs** (opt-in via `--sandbox`) | Agent escape, kernel exploits |
-| Container hardening | Non-root user, no-new-privileges, memory/CPU limits | Privilege escalation, resource abuse |
-| Credential separation | Vault holds keys, agents call via proxy | Key leakage, unauthorized API use |
-| Permission enforcement | Per-agent ACLs for messaging, blackboard, pub/sub, APIs | Unauthorized data access |
-| Input validation | Path traversal prevention, safe condition eval (no `eval()`), token budgets, iteration limits | Injection, runaway loops |
-| Unicode sanitization | Invisible character stripping at 56 call sites across three primary categories (user input, tool results, system prompt context) | Prompt injection via hidden Unicode |
+| Container hardening | UID 1000, `cap_drop=ALL`, `no-new-privileges`, read-only root FS, `tmpfs=/tmp` 100m noexec/nosuid, `pids_limit=256`, 384MB / 0.15 CPU (worker) | Privilege escalation, resource abuse |
+| Browser-container egress | iptables OUTPUT REJECT for RFC1918, loopback, link-local, CGNAT, IANA-reserved IPv4+IPv6; allows in-container loopback; fail-closed | SSRF/data exfil from the browser tier |
+| Credential separation | Two-tier vault: `OPENLEGION_SYSTEM_*` mesh-only; `OPENLEGION_CRED_*` agent-tier gated by glob. Opaque `$CRED{name}` handle substitution at call time. | Key leakage, unauthorized API use |
+| Permission enforcement | Per-agent ACLs (default deny) for messaging, pub/sub, blackboard globs, allowed_apis, browser_actions, wallet, control-plane flags | Unauthorized data access, capability escalation |
+| Input validation | Path traversal (4-stage check), AST validation for `create_skill`, SSRF protection, safe condition eval (no `eval()`), bounded execution caps | Injection, runaway loops |
+| Unicode sanitization | Invisible-character stripping at 56 call sites across user input, tool results, and system-prompt context | Prompt injection via hidden Unicode |
 
 ## Dual Runtime Backend
-
-OpenLegion supports two isolation levels:
 
 | | Docker Containers (default) | Docker Sandbox microVMs |
 |---|---|---|
@@ -29,64 +40,100 @@ OpenLegion supports two isolation levels:
 | **Requirements** | Any Docker install | Docker Desktop 4.58+ |
 | **Enable** | `openlegion start` | `openlegion start --sandbox` |
 
-### Docker Containers (default)
+`SandboxBackend` initialization can fail (Docker Desktop too old, hypervisor disabled, etc.). On failure it falls back to `DockerBackend` automatically and logs the reason.
 
-Agents run as non-root (UID 1000) with `no-new-privileges`, 384MB memory limit, 0.15 CPU quota, and no host filesystem access. Browser automation runs in a separate shared service container (2GB RAM, 1 CPU). Secure for most use cases.
+## Container Hardening (full set)
 
-### Docker Sandbox microVMs
+Worker containers run with the following enforced flags (`engine/src/host/runtime.py`):
 
-Each agent gets its own Linux kernel via Apple Virtualization.framework (macOS) or Hyper-V (Windows). Even if an agent achieves code execution, it's trapped inside a lightweight VM with no visibility into other agents or the host.
+- UID 1000 (non-root).
+- 384MB RAM, 0.15 CPU quota.
+- `pids_limit=256`.
+- `cap_drop=ALL`, `no-new-privileges`.
+- `read_only=True` root filesystem.
+- `tmpfs=/tmp` 100MB, `noexec`/`nosuid`.
 
-Use this when running untrusted code or when compliance requires hypervisor isolation.
+Operator containers run with the same hardening but **128MB RAM / 0.05 CPU**.
 
-```bash
-# Default: container isolation (works everywhere)
-openlegion start
-
-# Maximum security: microVM isolation (Docker Desktop 4.58+ required)
-openlegion start --sandbox
-```
-
-<Tip>
-Run `docker sandbox version` to check compatibility. If it returns a version number, your Docker Desktop supports sandboxes.
-</Tip>
+The browser service container is hardened the same way except it must add `NET_ADMIN`, `SETUID`, `SETGID` capabilities to run iptables and `gosu` to UID 1000. Its egress is locked down by the iptables filter described above.
 
 ## Credential Vault
 
-Agents never hold API keys. The credential vault uses a two-tier prefix system:
+Agents never hold API keys. The vault uses a two-tier prefix system:
 
-- **`OPENLEGION_SYSTEM_*`** — LLM provider keys (never agent-accessible)
-- **`OPENLEGION_CRED_*`** — Agent-tier tool/service keys (access controlled per-agent)
+- **`OPENLEGION_SYSTEM_*`** — LLM provider keys, channel tokens, master secrets. Never agent-accessible.
+- **`OPENLEGION_CRED_*`** — agent-tier tool/service keys. Access controlled per-agent via `allowed_credentials` (fnmatch glob, case-insensitive; `["*"]` = all agent-tier; system creds always blocked).
 
 How it works:
 
-1. The vault loads credentials from both `OPENLEGION_SYSTEM_*` and `OPENLEGION_CRED_*` environment variables
-2. Agents make API calls through the mesh proxy endpoint (`/mesh/api`)
-3. The vault injects credentials server-side before forwarding to the provider
-4. Budget limits are checked before dispatching LLM calls
-5. Token usage is recorded after each response
+1. The vault loads credentials from both prefix sets at startup.
+2. Agents call APIs through the mesh proxy. Their tool args may reference `$CRED{name}` — an opaque handle, not the secret value.
+3. The mesh substitutes the real value server-side before forwarding to the provider.
+4. Budget limits are checked before dispatching LLM calls; usage is recorded after.
 
-This means even a fully compromised agent cannot exfiltrate API keys — it never sees them.
+A fully compromised agent never sees the raw key — only the handle.
+
+**CAPTCHA solver credentials** (`CAPTCHA_SOLVER_KEY`, `_SECONDARY`, `CAPTCHA_SOLVER_PROXY_LOGIN`, `_PASSWORD`) intentionally bypass the standard vault. They live in env only and are stripped from `config/settings.json` at load.
 
 ## Permission Matrix
 
-Every cross-boundary operation is checked against per-agent ACLs defined in `config/permissions.json`. Default policy is **deny**.
+Per-agent ACLs in `config/permissions.json`. **Default policy: deny**; missing file means deny-all.
 
-Permissions control:
-- Which agents can message each other
-- Which pub/sub topics an agent can publish/subscribe to
-- Which blackboard paths an agent can read/write (glob patterns)
-- Which external APIs an agent can access through the vault
-- `can_use_browser` — whether the agent can use browser automation tools
-- `can_spawn` — whether the agent can spawn sub-agents
-- `can_manage_cron` — whether the agent can create/modify scheduled jobs
+Permissions cover:
+
+- **Messaging**: `can_message` (list of target agent IDs).
+- **Pub/Sub**: `can_publish`, `can_subscribe` (topic lists).
+- **Blackboard**: `blackboard_read`, `blackboard_write` (glob patterns).
+- **APIs**: `allowed_apis`, `allowed_credentials` (glob over agent-tier creds).
+- **Browser**: `can_use_browser`, `browser_actions` (`None`/`["*"]` = all known actions; `[]` = deny; specific list = allowlist).
+- **Cron**: `can_manage_cron`.
+- **Spawning**: `can_spawn`.
+- **Wallet**: `can_use_wallet`, `wallet_allowed_chains`, `wallet_spend_limit_per_tx_usd`, `wallet_spend_limit_daily_usd`, `wallet_rate_limit_per_hour`, `wallet_allowed_contracts`.
+- **Control-plane** (six flags, operator-default `true`, workers `false`): `can_manage_fleet`, `can_manage_projects`, `can_edit_agent_config`, `can_view_fleet_metrics`, `can_route_tasks`, `can_request_user_credentials`.
+
+**Operator ceiling:** the operator can adjust most permissions but **cannot grant `can_spawn=true` or `can_use_wallet=true`**. Those capabilities require a human operator outside the chat surface.
 
 ## Input Validation
 
-- **Path traversal prevention**: Agent file operations are confined to `/data` inside the container
-- **Safe condition evaluation**: Workflow conditions use a regex-based safe parser — never `eval()`
-- **Bounded execution**: Agent loops have hard limits (20 iterations for tasks, 30 tool rounds for chat)
-- **Token budgets**: Per-task token limits prevent runaway LLM spend
-- **SSRF protection**: DNS pinning and IP range blocking prevents agents from reaching private networks via HTTP requests
-- **VNC proxy token blocking**: The VNC proxy strips agent Bearer tokens to prevent credential leakage through browser sessions
-- **Credential redaction**: The HTTP tool automatically redacts sensitive headers and credentials from tool results returned to agents
+- **Path traversal protection** — agent file operations are confined to `/data` via a 4-stage check (strip `/data/` prefix, reject `..` lexically, `lstat()` symlink-safe walk, final `is_relative_to("/data")`).
+- **AST validation for skill self-authoring** — `create_skill` runs the candidate through an AST validator with **23 forbidden imports, 16 forbidden calls, 11 forbidden attribute accesses**, plus a 10,000-char size cap (`_MAX_SKILL_SIZE`).
+- **Safe condition evaluation** — workflow/condition parsing uses a regex-based safe parser, never `eval()`.
+- **Bounded execution** — task loops cap at `MAX_ITERATIONS=20`; chat at `CHAT_MAX_TOOL_ROUNDS=30` per turn / `CHAT_MAX_TOTAL_ROUNDS=200` per session / `_MAX_SESSION_CONTINUES=5`; heartbeats at `HEARTBEAT_MAX_ITERATIONS=12`.
+- **Token budgets** — per-agent daily ($0.01–$1000) and monthly ($0.10–$30000) caps enforced before dispatch.
+- **Tool-loop detection** — warn @ 2 repeats, block @ 4, terminate @ 9.
+
+## SSRF Protection
+
+The HTTP tool runs every outbound request through a multi-layer SSRF filter:
+
+- **DNS pinning** — resolve once, reuse the same IP for the actual connection.
+- **Blocklist** — RFC1918, loopback, link-local, CGNAT (`100.64.0.0/10`), 6to4 (`2002::/16`), Teredo, IPv4-mapped IPv6.
+- **Fail-closed on DNS error** — any resolution failure rejects the request.
+- **Max 5 redirects**, re-validated at each hop.
+- **Cross-origin auth strip** — Authorization headers are removed when redirecting to a new origin.
+
+The browser service container enforces its own iptables egress filter on top of this.
+
+## Dashboard & VNC
+
+- **CSRF** — state-changing dashboard endpoints require an `X-Requested-With` header.
+- **CSP** — the dashboard sets a CSP, but it allows `unsafe-inline` and `unsafe-eval` (Alpine.js requirement). Jinja `autoescape=True` is the primary XSS defense, not CSP.
+- **VNC proxy** at `/agent-vnc/{agent_id}/{path}` — **rejects agent Bearer tokens** and **requires the `ol_session` cookie on both HTTP and WebSocket** upgrade. Agent credentials cannot leak through a browser session.
+- **Authentication** — dev/self-hosted is open if `/opt/openlegion/.access_token` is absent. Hosted requires an `ol_session` cookie verified via HMAC (24h max age + 5-min skew). The SSO callback `/__auth/callback` and HMAC verification live in the upstream Caddy auth-gate sidecar — **the engine itself only consumes the cookie**.
+
+## Wallet Seed Reveal
+
+The master mnemonic is generated by `POST /api/wallet/init` and returned **once** with `Cache-Control: no-store`. Every subsequent call to `GET /api/wallet/seed` returns **HTTP 410 Gone** — there is no second-chance reveal. Private keys derived from the seed (BIP-44 for EVM, HMAC-SHA512 over PBKDF2 for Solana) never leave the mesh process.
+
+## What This Does NOT Do
+
+OpenLegion is small and honest about its limits. The following are **not** part of the threat model:
+
+- **No "zero-trust" claim.** We use trust zones + defense-in-depth.
+- **No compliance certifications** (SOC 2, ISO 27001, HIPAA). The engine is v0.1.0.
+- **Engine SQLite databases are not encrypted at rest.** Only `.env` is `chmod 0o600`; the provisioner separately encrypts SSH keys at rest with Fernet.
+- **JWT sessions are non-revocable** (NextAuth JWT strategy is stateless).
+- **App rate limiter is in-memory, single-region** — no global rate limits.
+- **`_blackboard_xproject_count` and `tool_denials_24h` are observability-only**, not enforcement.
+- **No air-gapped mode.** All agents need mesh egress for LLM proxy.
+- **The engine does not implement SSO end-to-end.** HMAC verification, replay protection, and cookie issuance live in the auth-gate sidecar shipped via cloud-init on managed VPSes — not in engine code.
