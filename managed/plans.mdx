@@ -6,25 +6,39 @@ icon: "credit-card"
 
 ## Plans
 
-All plans include container-isolated execution, 100+ LLM providers, monitoring dashboard, custom subdomain, and multi-channel support. You bring your own LLM API keys.
+Four self-serve tiers. Every plan includes container-isolated agent execution, 100+ LLM providers via LiteLLM, the OpenLegion credit-backed default model, monitoring dashboard, custom subdomain, multi-channel support (Telegram / Discord / Slack / WhatsApp / Webhook), and a dedicated single-tenant Hetzner Cloud VPS (ARM preferred, x86 fallback).
 
-| | Basic | Growth | Pro | Enterprise |
+| | Basic | Growth | Pro | Pro Max |
 |---|---|---|---|---|
-| **Monthly** | $19/mo | $49/mo | $119/mo | Custom |
-| **Yearly** | $170/yr | $440/yr | $1,070/yr | Custom |
-| **Agents** | 1 | 5 | 15 | Unlimited |
-| **Browsers** | 1 | 5 | 10 | Unlimited |
-| **Projects** | — | 2 | 5 | Unlimited |
-| **Infrastructure** | Shared-vCPU VPS (dedicated to you) | Shared-vCPU VPS (dedicated to you) | ARM VPS (dedicated CPU fallback) | Dedicated |
-| **Support** | Community | Community | Community | Priority + custom SLAs |
+| **Monthly** | $19/mo | $59/mo | $149/mo | $279/mo |
+| **Yearly** | $170/yr | $530/yr | $1,340/yr | $2,510/yr |
+| **Agents** | 1 | 5 | 15 | 30 |
+| **Browsers** | 1 | 5 | 10 | 30 |
+| **Projects** | 0 | 2 | 5 | 10 |
+| **Support** | Community | Community | Community | Community |
 
 Yearly billing saves approximately 25%.
 
 <Tip>
-  **Growth** is the most popular plan — 5 agents and 2 projects covers most use cases.
+  **Pro** is the most popular plan — 15 agents and 5 projects covers most production use cases.
 </Tip>
 
-For Enterprise pricing, contact [admin@openlegion.ai](mailto:admin@openlegion.ai).
+<Note>
+  **No free trial.** Your card is charged at checkout. Payments are processed by **Polar**.
+</Note>
+
+### Enterprise
+
+For higher limits, dedicated infrastructure, custom contracts, or contractual support, contact [admin@openlegion.ai](mailto:admin@openlegion.ai). Enterprise is not a self-serve tier.
+
+### LLM usage and credits
+
+Every managed instance is provisioned with OpenLegion's credit-backed proxy as its default model (`openlegion/openai/gpt-5.4`). When your subscription first becomes active, welcome credits are granted automatically. You can also:
+
+- **Bring your own API keys** (BYOK) for any of the 11 supported providers — they overlay on top of the credit proxy, giving you access to additional models.
+- **Top up credits** from the `/credits` page in the app.
+
+Engine-side, every LLM call is charged to a per-agent + per-project ledger (`data/costs.db`). Defaults: `$10/day` and `$200/month` per agent. The operator agent can raise these up to `$1,000/day` and `$30,000/month`. CAPTCHA-solving spend is tracked in a separate ledger in millicents (1/100,000 USD).
 
 ## Changing plans
 
@@ -32,13 +46,13 @@ Manage your plan from the **Settings** page at [app.openlegion.ai](https://app.o
 
 ### Upgrades
 
-Upgrades take effect immediately. You're charged a prorated amount for the remainder of your billing period. Your agent and project limits increase right away.
+Upgrades take effect **immediately**. You're charged a prorated amount for the remainder of your billing period. Your agent, project, and browser limits increase right away.
 
-If the upgrade requires a larger server, an automatic resize happens — this takes about a minute of downtime.
+If the upgrade requires a larger server, an automatic resize happens. Resize sequence: pre-scale limits → power off → `change_server_type` → power on → wait for SSH → re-apply limits → wait for engine health (up to 240s). Total downtime: **~30-60 seconds**.
 
 ### Downgrades
 
-Downgrades are scheduled for the end of your current billing period. You keep your current plan's limits until then. At renewal, your plan switches and limits adjust.
+Downgrades are **scheduled for the end of your current billing period**. You keep your current plan's limits until then. At renewal, your plan switches and limits adjust.
 
 You can cancel a pending downgrade from the Settings page by clicking **Keep current plan**.
 
@@ -48,10 +62,16 @@ Switching between monthly and yearly billing takes effect at your next renewal.
 
 ## Cancellation
 
-Cancel from the **Settings** page. Your instance stays active until the end of your current billing period. After that, the server is deprovisioned and data is deleted.
+Cancel from the **Settings** page. Your instance stays active until the end of your current billing period (`currentPeriodEnd`). After that, the server is deprovisioned and data is deleted.
 
-You can **resume** a cancelled subscription at any time before the billing period ends.
+You can **resume** a cancelled subscription at any time before the billing period ends. There is no data export UI — back up anything you need from the engine dashboard before the period ends.
 
 ## Payment issues
 
-If a payment fails, your subscription enters a **past due** state. You'll see a banner in the app dashboard prompting you to update your payment method. After 3 days, your instance is paused. After 14 days without payment, the instance is permanently deleted.
+If a payment fails, your subscription enters a **past_due** state. The app considers your subscription active during the grace period.
+
+- **Day 0-3** — banner shown in the app; instance keeps running. Update payment to clear.
+- **Day 3** — instance is **paused** (`systemctl stop` via provisioner). The VPS is preserved; resume is automatic once payment succeeds.
+- **Day 14** — instance is **permanently deprovisioned**. The VPS and all data are deleted.
+
+Authentication for the past-due cron uses a timing-safe bearer check; the provisioner is pinged first and the action is skipped if it's unreachable.

@@ -10,7 +10,7 @@ Sign up at [app.openlegion.ai](https://app.openlegion.ai) and get a dedicated ag
 <Steps>
 <Step title="Create an account">
 
-Go to [app.openlegion.ai](https://app.openlegion.ai) and sign in with **Google**, **GitHub**, or **Discord**.
+Go to [app.openlegion.ai](https://app.openlegion.ai) and sign in with **Google**, **GitHub**, or **Discord**. There is no email/password option.
 
 </Step>
 
@@ -18,16 +18,20 @@ Go to [app.openlegion.ai](https://app.openlegion.ai) and sign in with **Google**
 
 After signing in, you'll see the pricing page. Pick the plan that fits your needs:
 
-| Plan | Price | Agents | Browsers | Projects |
-|------|-------|--------|----------|----------|
-| **Basic** | $19/mo | 1 | 1 | — |
-| **Growth** | $49/mo | 5 | 5 | 2 |
-| **Pro** | $119/mo | 15 | 10 | 5 |
-| **Enterprise** | Custom | Unlimited | Unlimited | Unlimited |
+| Plan | Monthly | Yearly | Agents | Browsers | Projects |
+|------|---------|--------|--------|----------|----------|
+| **Basic** | $19/mo | $170/yr | 1 | 1 | 0 |
+| **Growth** | $59/mo | $530/yr | 5 | 5 | 2 |
+| **Pro** | $149/mo | $1,340/yr | 15 | 10 | 5 |
+| **Pro Max** | $279/mo | $2,510/yr | 30 | 30 | 10 |
 
-All plans include container-isolated execution, 100+ LLM providers, a monitoring dashboard, and a custom subdomain. Yearly billing saves 25%.
+All plans include container-isolated execution, 100+ LLM providers via LiteLLM, a monitoring dashboard, a custom subdomain, and a built-in OpenLegion credit-backed default model. Yearly billing saves approximately 25%.
 
-Click **Get Started** on your chosen plan to complete checkout.
+<Note>
+  **No free trial** — your card is charged immediately at checkout. Need higher limits, dedicated infra, or a custom contract? Email [admin@openlegion.ai](mailto:admin@openlegion.ai) for Enterprise pricing.
+</Note>
+
+Click **Get Started** on your chosen plan to complete checkout. Payments are processed by Polar.
 
 </Step>
 
@@ -39,7 +43,7 @@ After payment, you'll land on the setup page. Pick a subdomain for your fleet �
 https://my-fleet.engine.openlegion.ai
 ```
 
-Subdomains must be 3-20 characters, start with a letter, and can contain lowercase letters, numbers, and hyphens.
+Subdomains must be 3-20 characters, start with a letter, end with a letter or number, contain only lowercase letters/numbers/hyphens, and cannot include consecutive hyphens. Reserved names (`api`, `admin`, `dashboard`, `www`, etc.) are blocked.
 
 Click **Launch My Server**.
 
@@ -49,47 +53,51 @@ Click **Launch My Server**.
 
 Your dedicated server is being set up. The setup page shows live progress through four stages:
 
-1. **Creating your dedicated server** — a VPS is provisioned in the cloud
-2. **Installing OpenLegion** — Docker, the engine, and all dependencies are installed
-3. **Configuring your instance** — your fleet is configured and started
-4. **Go live** — your instance is ready
+1. **Creating your dedicated server** — a Hetzner Cloud VPS is provisioned (ARM preferred, x86 fallback)
+2. **Installing OpenLegion** — Docker, Caddy (auto-SSL via Let's Encrypt), the auth-gate sidecar, and the engine are installed
+3. **Configuring your instance** — your API keys are written and the agent fleet is started
+4. **Go live** — your instance is reachable on your subdomain
 
-This typically takes 10-15 minutes. The page updates automatically.
+Typical total: **~5-12 minutes**. The page polls every 10s and updates automatically.
 
 </Step>
 
 <Step title="Open your dashboard">
 
-Once provisioning completes, click **Open Dashboard** to access your fleet's engine dashboard. From there you can:
+Once provisioning completes, click **Open Dashboard** to single-sign-on into your fleet's engine dashboard. (Direct navigation to your subdomain requires an active engine session — always start from the app's "Open Dashboard" button.)
 
-- Add API keys for your LLM providers
-- Configure agents (personalities, tools, budgets)
-- Connect messaging channels (Telegram, Discord, Slack, WhatsApp)
-- Set up workflows and automation
+From the engine dashboard you can:
+
+- Add or replace LLM provider keys (BYOK overlay on top of the OpenLegion-managed default)
+- Configure agents (instructions, soul, model, budget, thinking mode)
+- Connect messaging channels (Telegram, Discord, Slack, WhatsApp, Webhook)
+- Schedule cron jobs and heartbeats
 - Monitor costs and activity in real time
+
+The dashboard has four top-nav tabs: **Chat**, **Work**, **Team**, and **Settings** (with 11 sub-tabs).
 
 </Step>
 </Steps>
 
 ## What happens next
 
-Your fleet runs on a dedicated server at `{your-subdomain}.engine.openlegion.ai`. You manage it through the engine dashboard — the same interface available to self-hosted users.
+Your fleet runs on a dedicated VPS at `{your-subdomain}.engine.openlegion.ai`. You manage it through the engine dashboard — the same interface available to self-hosted users.
 
-The app at [app.openlegion.ai](https://app.openlegion.ai) handles your subscription, billing, and server management. The engine dashboard on your subdomain is where you configure and interact with your agents.
+The app at [app.openlegion.ai](https://app.openlegion.ai) handles your subscription, billing, and server lifecycle. Every configured managed instance is provisioned with OpenLegion's credit-backed proxy as the default model (`openlegion/openai/gpt-5.4`) so you can start chatting without bringing your own API key.
 
 ## Next steps
 
 <CardGroup cols={2}>
   <Card title="Managed Hosting Overview" icon="cloud" href="/managed/overview">
-    Understand what's included and how managed hosting works.
+    Understand what's included and how managed hosting works end-to-end.
   </Card>
   <Card title="Plans & Billing" icon="credit-card" href="/managed/plans">
     Compare plans, upgrade, downgrade, and manage billing.
   </Card>
   <Card title="Agent Tools" icon="toolbox" href="/reference/agent-tools">
-    47 built-in tools including browser automation, web search, and memory.
+    Browser automation, memory, coordination, wallet, and more.
   </Card>
-  <Card title="Workflows" icon="diagram-project" href="/features/workflows">
-    Chain agents together with deterministic DAG workflows.
+  <Card title="Coordination" icon="diagram-project" href="/features/coordination">
+    How agents collaborate: blackboard, pub/sub, handoffs, lanes.
   </Card>
 </CardGroup>

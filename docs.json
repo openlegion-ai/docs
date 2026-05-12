@@ -40,7 +40,7 @@
             "group": "Features",
             "pages": [
               "features/agents",
-              "features/workflows",
+              "features/coordination",
               "features/memory",
               "features/triggering",
               "features/channels",

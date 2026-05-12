@@ -11,9 +11,10 @@ Run OpenLegion on your own machine with full control over your infrastructure.
 
 ## Requirements
 
-- Python 3.10+
-- Docker (running)
-- An LLM API key ([Anthropic](https://console.anthropic.com/) / [OpenAI](https://platform.openai.com/api-keys) / [Moonshot](https://platform.moonshot.cn/) / any of 100+ providers)
+- **Python 3.10+** (CI tested on 3.11 and 3.12)
+- **Docker** running. Docker Desktop on macOS / Windows; on Linux either Docker Desktop or docker engine with your user in the `docker` group (`sudo usermod -aG docker $USER`, then re-login)
+- **One LLM API key** ([Anthropic](https://console.anthropic.com/) / [OpenAI](https://platform.openai.com/api-keys) / [Moonshot](https://platform.moonshot.cn/) / any of 100+ providers via LiteLLM), or run [Ollama](https://ollama.com) locally for a keyless setup
+- **OS:** macOS, Linux, or Windows (PowerShell + Docker Desktop with WSL 2)
 
 ## Install and launch
 
@@ -23,7 +24,7 @@ Run OpenLegion on your own machine with full control over your infrastructure.
 <CodeGroup>
 ```bash macOS / Linux
 git clone https://github.com/openlegion-ai/openlegion.git && cd openlegion
-./install.sh                     # checks deps, creates venv, makes CLI global
+./install.sh                     # checks deps, creates .venv, makes CLI global
 ```
 
 ```powershell Windows
@@ -34,7 +35,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 </CodeGroup>
 
 <Note>
-First install downloads ~70 packages and takes 2-3 minutes. Subsequent installs are fast.
+First install downloads ~70 packages and takes 2-3 minutes. The first `openlegion start` then builds two Docker images (~1 min for the agent image, ~3 min for the browser service).
 </Note>
 </Step>
 
@@ -45,56 +46,94 @@ openlegion start                 # inline setup on first run, then launch agents
 ```
 
 On first run (no credentials configured), `openlegion start` detects this and offers three paths:
-1. **Quick setup here** — pick a provider, paste your API key (validated), choose a model, then optionally create your first agent
-2. **Open the dashboard** — configure everything via the web UI at `/dashboard`
+1. **Quick setup here** — pick a provider, paste your API key (validated), choose a model, then optionally create your first agent or apply a team template
+2. **Open the dashboard** — configure everything via the web UI at `http://localhost:8420/`
 3. **Skip** — start the runtime and use `/addkey` later in the REPL
 
-After setup, it launches the mesh host, spins up agent containers, and drops you into the interactive REPL. Start chatting with your agents immediately.
+After setup, it launches the mesh host on port 8420, spins up agent containers, and drops you into the interactive REPL. Start chatting with your agents immediately.
 
 **Team Templates** (offered during first-run setup):
 
 | Template | Agents | Use Case |
 |----------|--------|----------|
 | `starter` | assistant | Single general-purpose agent |
+| `content` | researcher, writer | Blog / social / email from briefs |
+| `deep-research` | scout, analyst | Multi-source synthesis with citations |
+| `devteam` | pm, engineer, reviewer | Software development team |
+| `monitor` | watcher, analyst | Always-on monitoring |
 | `sales` | researcher, qualifier, outreach | Sales pipeline |
-| `devteam` | pm, engineer, reviewer | Software development |
-| `content` | researcher, writer, editor | Content creation |
-| `deep-research` | researcher | Deep research specialist |
-| `monitor` | monitor | System monitoring agent |
-| `competitive-intel` | tracker, analyst | Competitive intelligence gathering |
-| `lead-enrichment` | enricher, verifier | Lead data enrichment and verification |
-| `price-intelligence` | scraper, analyst | Price monitoring and analysis |
-| `review-ops` | collector, responder | Review aggregation and response management |
-| `social-listening` | listener, reporter | Social media monitoring and reporting |
+| `competitive-intel` | tracker, analyst | Competitor pricing/product tracking |
+| `lead-enrichment` | enricher, verifier | Lead list research |
+| `price-intelligence` | crawler, analyst | Price monitoring with anti-bot browser |
+| `review-ops` | collector, responder | G2 / Trustpilot / Capterra / App Store / Google reviews + reply drafts |
+| `social-listening` | listener, reporter | Reddit / HN / X competitor pain-point monitor |
+| `research` | researcher | General-purpose researcher |
+| `opportunity-finder` | scout, evaluator, modeler | Gap-scout + evaluation + modeling |
 
 </Step>
 </Steps>
 
+Once the engine is running, open `http://localhost:8420/` for the web dashboard (four top-nav tabs: **Chat / Work / Team / Settings**).
+
 ## Common operations
 
 ```bash
-# Add more agents later
-openlegion agent add researcher
+# Check status / health of agents
+openlegion status                # --wide for cost, --watch N to auto-refresh, --json for machine output
 
-# Check status
-openlegion status
+# Run in background (daemon mode)
+openlegion start -d              # Log: .openlegion.log | PID: .openlegion.pid
+openlegion chat researcher       # Connect to a running agent from another terminal
+openlegion stop                  # Clean shutdown of mesh + all openlegion_* containers
 
-# Run in background
-openlegion start -d
-openlegion chat researcher   # connect from another terminal
-openlegion stop              # clean shutdown
+# microVM mode (Docker Desktop 4.58+; falls back to standard Docker on failure)
+openlegion start --sandbox
+
+# Projects, tasks, pending actions
+openlegion projects              # List active projects
+openlegion project <ID>          # Single project details
+openlegion tasks                 # List durable task records (V2 orchestration)
+openlegion pending               # List open operator actions awaiting confirmation
+openlegion confirm <NONCE>       # Confirm a pending action
+openlegion cancel <NONCE>        # Cancel a pending action
+
+# Wallet (EVM + Solana)
+openlegion wallet init           # Generate a 24-word BIP-39 seed (shown ONCE; stored in .env)
+openlegion wallet show           # Show wallet addresses on all chains
+
+# Reset (stops + wipes config/, data/, agent skills, Docker volumes; keeps .env)
+openlegion reset
 ```
+
+Inside the REPL, `/add` hot-adds a new agent to the running fleet, `/edit` modifies one, and `/remove` removes one. See the [CLI Reference](/reference/cli) for the full REPL command surface.
 
 ## Connect a channel
 
+Channels auto-start when their token resolves — there is no separate enable flag. Add the credential to `.env` (or use `/addkey` inside the REPL):
+
 ```bash
-openlegion channels add telegram    # prompts for bot token from @BotFather
-openlegion channels add discord     # prompts for bot token
-openlegion channels add slack       # prompts for Slack bot token
-openlegion channels add whatsapp    # prompts for WhatsApp Cloud API credentials
+# Telegram — bot token from @BotFather
+OPENLEGION_CRED_TELEGRAM_BOT_TOKEN=123456:ABC...
+
+# Discord — bot token; requires Message Content Intent + bot/applications.commands scopes
+OPENLEGION_CRED_DISCORD_BOT_TOKEN=MTIz...
+
+# Slack — Socket Mode, both tokens required (no public URL needed)
+OPENLEGION_CRED_SLACK_BOT_TOKEN=xoxb-...
+OPENLEGION_CRED_SLACK_APP_TOKEN=xapp-...
+
+# WhatsApp — Cloud API (Graph v21.0); text-only, non-text dropped
+OPENLEGION_CRED_WHATSAPP_ACCESS_TOKEN=EAAx...
+OPENLEGION_CRED_WHATSAPP_PHONE_NUMBER_ID=1234...
 ```
 
-On next `openlegion start`, a pairing code appears — send it to your bot to link.
+On the next `openlegion start`, the channel prints a pairing code; send `/start <code>` from your account to the bot to link it as the owner.
+
+<Warning>
+  **WhatsApp in production** must set `WHATSAPP_APP_SECRET` for HMAC webhook signature verification. Without it (when `MESH_AUTH_TOKEN` is also set), the channel startup raises a `RuntimeError`. Also strongly recommended: set `OPENLEGION_SYSTEM_WHATSAPP_VERIFY_TOKEN` so the verify token stays stable across restarts.
+</Warning>
+
+**Webhooks** are created from the engine dashboard (System tab → Integrations); there is no `openlegion webhooks` command. Each hook is reachable at `POST /webhook/hook/<hook_id>` with an optional HMAC-SHA256 signature; bodies are capped at 1 MB and truncated to 3000 chars when dispatched to agents.
 
 ## Next steps
 
@@ -108,7 +147,7 @@ On next `openlegion start`, a pairing code appears — send it to your bot to li
   <Card title="Configuration" icon="gear" href="/reference/configuration">
     Customize agents, permissions, models, and budgets.
   </Card>
-  <Card title="Workflows" icon="diagram-project" href="/features/workflows">
-    Chain agents together with deterministic DAG workflows.
+  <Card title="Coordination" icon="diagram-project" href="/features/coordination">
+    How agents collaborate: blackboard, pub/sub, handoffs, lanes.
   </Card>
 </CardGroup>

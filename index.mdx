@@ -1,21 +1,21 @@
 ---
 title: "OpenLegion"
-description: "Autonomous AI agent fleets — managed or self-hosted"
+description: "Container-isolated multi-agent runtime — managed or self-hosted"
 ---
 
 ## What is OpenLegion?
 
-OpenLegion is a platform for running autonomous AI agent fleets. Every agent gets its own isolated Docker container with private memory, tools, schedule, and budget — coordinated through deterministic YAML workflows.
+OpenLegion is a **container-isolated multi-agent runtime**. Every agent runs in its own Docker container with private memory, tools, schedule, and budget — coordinated through a SQLite-backed blackboard, pub/sub events, and a structured handoff protocol. Fleet model — no CEO agent.
 
-API keys never leave the vault. Agents call through a proxy and never handle credentials directly. Chat with your fleet via **Telegram**, **Discord**, **Slack**, **WhatsApp**, or CLI. Monitor everything from a real-time web dashboard.
+API keys never leave the mesh — agents proxy LLM calls through a credential vault and never see secrets. Chat with your fleet via **Telegram**, **Discord**, **Slack**, **WhatsApp**, **Webhook**, or the CLI REPL. Monitor everything from the engine dashboard (`Chat / Work / Team / Settings`).
 
-No LangChain. No Redis. No Kubernetes. No CEO agent. 100+ LLM providers.
+No LangChain. No Redis. No Kubernetes. No CEO agent. 100+ LLM providers via LiteLLM.
 
 ## Get started
 
 <CardGroup cols={2}>
   <Card title="Managed Hosting" icon="cloud" href="/quickstart" horizontal>
-    Sign up at app.openlegion.ai and get a dedicated agent fleet running in minutes. No infrastructure to manage.
+    Sign up at app.openlegion.ai and get a dedicated agent fleet running in ~5-12 minutes. No infrastructure to manage.
   </Card>
   <Card title="Self-Hosted" icon="server" href="/self-hosting" horizontal>
     Clone the repo and run on your own machine. Full control, no account needed.
@@ -26,22 +26,22 @@ No LangChain. No Redis. No Kubernetes. No CEO agent. 100+ LLM providers.
 
 <CardGroup cols={2}>
   <Card title="Security by Architecture" icon="shield">
-    Every agent runs in an isolated Docker container. API keys live in a credential vault — agents never see them. Defense-in-depth with 6 security layers.
+    Agents run as UID 1000 in cap-dropped, read-only Docker containers with 384 MB RAM / 0.15 CPU defaults. API keys live in a mesh-tier credential vault — agents never see them. Defense-in-depth across container isolation, vault proxy, SSRF guard, AST-validated skills, per-agent budgets, and rate-limit categories.
   </Card>
-  <Card title="Deterministic Orchestration" icon="diagram-project">
-    YAML-defined DAG workflows with step dependencies, conditions, retries, and failure handlers. No LLM decides what runs next.
+  <Card title="Fleet Model — No CEO Agent" icon="diagram-project">
+    Agents coordinate through a SQLite-backed blackboard (with atomic CAS), pub/sub events, per-agent FIFO lanes, and a structured handoff protocol. No LLM "router" decides what runs next.
   </Card>
   <Card title="Cost Controls" icon="dollar-sign">
-    Per-agent LLM token tracking with enforced daily and monthly budget caps at the vault layer. Agents physically cannot spend what you haven't authorized.
+    Per-agent and per-project LLM cost ledger enforces daily ($10 default) and monthly ($200 default) USD caps before each request. CAPTCHA spend ledger tracked separately in millicents.
   </Card>
   <Card title="Self-Improving Agents" icon="brain">
-    Agents learn from tool failures and user corrections, injecting past learnings into future sessions. They write their own Python skills at runtime and hot-reload them.
+    Agents learn from tool failures and user corrections — `errors.md` and `corrections.md` auto-inject each session. Agents can write their own Python skills at runtime (AST-validated against 23 forbidden imports / 16 forbidden calls / 11 forbidden attrs, max 10K chars) and hot-reload them.
   </Card>
   <Card title="Multi-Channel" icon="comments">
-    Connect agents to Telegram, Discord, Slack, and WhatsApp. Also accessible via CLI and API. Monitor via real-time web dashboard.
+    Connect agents to Telegram, Discord, Slack, WhatsApp, Webhooks, and the CLI REPL. Engine dashboard provides chat, kanban, agent grid, and settings surfaces.
   </Card>
   <Card title="100+ LLM Providers" icon="plug">
-    Configurable model failover chains cascade across LLM providers with per-model health tracking and exponential cooldown via LiteLLM.
+    Routed via LiteLLM (100+ providers). 15 system-tier providers are natively supported with mesh-managed keys; failover chains with per-model health tracking and exponential cooldown.
   </Card>
 </CardGroup>
 
@@ -52,10 +52,10 @@ No LangChain. No Redis. No Kubernetes. No CEO agent. 100+ LLM providers.
     Dedicated VPS, custom subdomain, automatic provisioning, and subscription management.
   </Card>
   <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
-    Trust zones, mesh host, and agent containers.
+    Trust zones, mesh host, agent containers, and the browser service.
   </Card>
-  <Card title="Workflows" icon="diagram-project" href="/features/workflows">
-    Deterministic DAG workflows for multi-agent orchestration.
+  <Card title="Coordination" icon="diagram-project" href="/features/coordination">
+    Blackboard, pub/sub, lanes, handoffs, and fleet templates.
   </Card>
   <Card title="Configuration" icon="gear" href="/reference/configuration">
     Agents, permissions, mesh settings, and environment variables.
