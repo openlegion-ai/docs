@@ -1,34 +1,38 @@
 ---
 title: "MCP Tool Support"
-description: "Plug in any MCP-compatible tool server"
+description: "Plug in Model Context Protocol servers over stdio"
 icon: "plug"
 ---
 
-OpenLegion supports the **[Model Context Protocol (MCP)](https://modelcontextprotocol.io)** — the emerging standard for LLM tool interoperability. Any MCP-compatible tool server can be plugged into an agent via config, with tools automatically discovered and exposed to the LLM alongside built-in skills.
+OpenLegion supports the **[Model Context Protocol (MCP)](https://modelcontextprotocol.io)** — the emerging standard for LLM tool interoperability — over **stdio transport**.
+
+<Warning>
+**stdio transport only.** HTTP and SSE transports are not currently wired up in OpenLegion. MCP servers that require those transports won't work.
+
+**Default agent image is Python-only.** The Python `mcp` SDK is pre-installed, so Python-based MCP servers work out of the box. **Node.js is NOT installed.** npm-based servers (`@modelcontextprotocol/server-filesystem`, `-github`, `-playwright`, etc.) require a custom agent Dockerfile that installs Node.js.
+</Warning>
 
 ## Configuration
 
-Add `mcp_servers` to any agent in `config/agents.yaml`:
+MCP servers are configured **per-agent**. Add `mcp_servers` to any agent definition:
 
 ```yaml
 agents:
   researcher:
     role: "research"
-    model: "openai/gpt-4.1-mini"
+    model: "anthropic/claude-haiku-4"
     mcp_servers:
-      - name: filesystem
-        command: mcp-server-filesystem
-        args: ["/data"]
-      - name: database
-        command: mcp-server-sqlite
-        args: ["--db", "/data/research.db"]
+      - name: sqlite
+        command: python
+        args: ["-m", "mcp_server_sqlite", "--db", "/data/research.db"]
+      - name: fetch
+        command: python
+        args: ["-m", "mcp_server_fetch"]
 ```
 
 Each server is launched as a subprocess inside the agent container using stdio transport. Tools are discovered automatically via the MCP protocol and appear in the LLM's tool list alongside built-in skills.
 
-<Note>
-npm-based MCP servers (like `@modelcontextprotocol/server-filesystem`) require Node.js installed in the agent container. Python-based servers work by default.
-</Note>
+**Per-call timeout: 60s.** A handshake or tool call that exceeds 60s raises an error. Built-in skills are unaffected.
 
 <Note>
 If one MCP server fails to start, other servers continue normally. Built-in skills are always available regardless of MCP server status.
@@ -36,12 +40,19 @@ If one MCP server fails to start, other servers continue normally. Built-in skil
 
 ## How It Works
 
-1. Agent container reads `MCP_SERVERS` from environment (set by the runtime)
-2. `MCPClient` launches each server subprocess via stdio transport
-3. MCP protocol handshake discovers available tools and their schemas
-4. Tools are registered in `SkillRegistry` with OpenAI function-calling format
-5. LLM tool calls route through `MCPClient.call_tool()` to the correct server
-6. Name conflicts with built-in skills are resolved by prefixing (`mcp_{server}_{tool}`)
+1. Agent container reads `MCP_SERVERS` from environment (set by the runtime).
+2. `MCPClient` launches each server subprocess via stdio transport.
+3. MCP protocol handshake discovers available tools and their schemas.
+4. Tools are registered in `SkillRegistry` with OpenAI function-calling format.
+5. LLM tool calls route through `MCPClient.call_tool()` to the correct server.
+6. If an MCP tool's name collides with a built-in skill or another MCP server's tool, the colliding tool is registered as **`mcp_{server_name}_{tool_name}`** at agent boot. Built-in skills always keep the original name.
+
+## Known limitations
+
+- **stdio only** — HTTP and SSE transports not wired.
+- **Image and binary content silently dropped.** Only text blocks from `CallToolResult` are forwarded to the agent (concatenated under the `"result"` key). MCP servers that return images won't surface those to the LLM.
+- **60s per-call timeout.**
+- **Python-only default image** — see warning above.
 
 ## Server Config Options
 
@@ -52,24 +63,40 @@ If one MCP server fails to start, other servers continue normally. Built-in skil
 | `args` | list | Command-line arguments (optional) |
 | `env` | dict | Environment variables for the server process (optional) |
 
-## Example: SQLite Database Access
+## Example: SQLite (Python)
 
 ```yaml
 mcp_servers:
   - name: db
-    command: mcp-server-sqlite
-    args: ["--db", "/data/mydb.sqlite"]
+    command: python
+    args: ["-m", "mcp_server_sqlite", "--db", "/data/mydb.sqlite"]
 ```
 
-Once configured, the agent can query the database using natural language — the MCP server translates tool calls into SQL queries.
+The agent can now query the database — the MCP server translates tool calls into SQL.
 
-## Example: Filesystem Access
+## Example: filesystem (requires custom image)
+
+The `@modelcontextprotocol/server-filesystem` reference server is npm-based. To use it, build a custom agent image that installs Node.js on top of the default `openlegion-agent:latest`:
+
+```dockerfile
+# Dockerfile.agent-with-node
+FROM openlegion-agent:latest
+USER root
+RUN apt-get update && apt-get install -y nodejs npm \
+    && rm -rf /var/lib/apt/lists/*
+USER agent
+```
+
+Then point your agent at it and reference the npm package:
 
 ```yaml
-mcp_servers:
-  - name: fs
-    command: mcp-server-filesystem
-    args: ["/data/workspace"]
+agents:
+  archivist:
+    image: "openlegion-agent-with-node:latest"
+    mcp_servers:
+      - name: fs
+        command: npx
+        args: ["-y", "@modelcontextprotocol/server-filesystem", "/data/workspace"]
 ```
 
-This gives the agent structured file operations beyond the built-in file tools, such as directory tree listing and file metadata.
+If you're staying on the stock image, prefer a Python-based filesystem server or use the built-in `file_tool`.

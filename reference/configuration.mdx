@@ -6,7 +6,7 @@ icon: "gear"
 
 ## `PROJECT.md` — Fleet-Wide Context
 
-Shared across all agents. Loaded into every agent's system prompt.
+Shared across all agents. Loaded into every agent's system prompt as part of the 48K-char bootstrap injection.
 
 ```markdown
 # PROJECT.md
@@ -22,6 +22,8 @@ Ship the email personalization pipeline this week
 - No cold outreach to .edu or .gov domains
 ```
 
+`PROJECT.md` is **read-only at runtime** — agents cannot modify it. Update it from the engine dashboard or via the `/project` REPL command. (The operator agent also has a `update_project_context` tool that proposes changes for confirmation.)
+
 ## `config/mesh.yaml` — Framework Settings
 
 ```yaml
@@ -30,81 +32,79 @@ mesh:
   port: 8420
 
 llm:
-  default_model: "openai/gpt-4.1-mini"
-  embedding_model: "text-embedding-3-small"
+  default_model: "openai/gpt-4.1-mini"     # wizard suggestion; engine fallback is "openai/gpt-4o-mini"
+  embedding_model: "text-embedding-3-small"  # 1536 dims (OpenAI); non-OpenAI providers degrade to keyword-only
   max_tokens: 4096
   temperature: 0.7
-  failover:
-    primary: "anthropic/claude-sonnet-4-6"
-    fallback: "openai/gpt-4.1-mini"
+  # Per-model failover chain — agents retry the next entry on per-model health failure
+  failover_chains:
+    "anthropic/claude-sonnet-4-6":
+      - "openai/gpt-4.1-mini"
+      - "openai/gpt-4o-mini"
 
 channels:
   telegram:
-    enabled: true
     default_agent: assistant
   discord:
-    enabled: false
     default_agent: assistant
-  slack:
-    enabled: false
-  whatsapp:
-    enabled: false
+  slack: {}
+  whatsapp: {}
 ```
 
-## `config/agents.yaml` — Agent Definitions
+<Note>
+  **Channels use token-presence activation** — there is no `enabled: true/false` flag. A channel auto-starts when its bot token resolves through the credential vault. Resolution order: `OPENLEGION_SYSTEM_<NAME>` → `OPENLEGION_CRED_<NAME>` → bare env → `mesh.yaml channels.<name>.bot_token`. Remove the token to disable the channel.
+</Note>
 
-Created automatically by `openlegion start` (inline setup) or the `/add` REPL command.
+## Agent Definitions
 
-```yaml
-agents:
-  researcher:
-    role: "research"
-    model: "openai/gpt-4.1-mini"
-    skills_dir: "./skills/research"
-    initial_instructions: "You are a research specialist..."
-    initial_soul: "Methodical, thorough, citation-driven."
-    thinking: "medium"                   # off (default), low, medium, or high
-    avatar: 10
-    resources:
-      memory_limit: "384m"
-      cpu_limit: 0.15
-    budget:
-      daily_usd: 5.00
-      monthly_usd: 100.00
-```
+There is **no top-level `config/agents.yaml` shipped** with the engine. Agents are defined one of three ways:
 
-### Agent Config Fields
+1. **Templates** in `src/templates/*.yaml` (the 13 fleet templates).
+2. **Dashboard / operator tools** at runtime (the operator agent's `create_agent`, `edit_agent`, and `apply_template` tools, or the engine dashboard's Team tab).
+3. **REPL** via `/add` while `openlegion start` is running.
+
+Each agent record carries:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `role` | string | Agent's role identifier |
-| `model` | string | LLM model in LiteLLM format (e.g., `openai/gpt-4.1-mini`, `anthropic/claude-sonnet-4-6`) |
+| `role` | string | Agent's role identifier (template-fixed when applied from a template) |
+| `model` | string | LiteLLM model id (e.g., `openai/gpt-4.1-mini`, `anthropic/claude-sonnet-4-6`) |
 | `skills_dir` | string | Path to custom skills directory |
-| `initial_instructions` | string | Agent's initial instructions (loaded into workspace) |
-| `initial_soul` | string | Agent's personality and behavior definition |
-| `avatar` | int | Avatar number for dashboard display |
-| `resources.memory_limit` | string | Container memory limit (default: `384m`) |
-| `resources.cpu_limit` | float | CPU quota (default: `0.15`) |
-| `budget.daily_usd` | float | Daily LLM spend cap |
-| `budget.monthly_usd` | float | Monthly LLM spend cap |
+| `system_prompt` | string | Custom system prompt override (replaces the default) |
+| `initial_instructions` | string | Initial INSTRUCTIONS.md content (≤12K chars) |
+| `soul` | string | Initial SOUL.md content / persona (≤4K chars) |
+| `initial_interface` | string | Initial INTERFACE.md content (≤4K chars) |
+| `heartbeat` | string | Initial HEARTBEAT.md content (uncapped) |
 | `thinking` | string | Extended thinking: `off` (default), `low`, `medium`, or `high` |
-| `system_prompt` | string | Custom system prompt override (replaces the default agent system prompt) |
-| `mcp_servers` | list | [MCP tool servers](/features/mcp) |
+| `resources.memory_limit` | string | Container memory (worker default: `384m`; operator: `128m`) |
+| `resources.cpu_limit` | float | CPU quota (worker default: `0.15`; operator: `0.05`) |
+| `budget.daily_usd` | float | Daily LLM spend cap (default `10.00`; operator clamp: `0.01-1000`) |
+| `budget.monthly_usd` | float | Monthly LLM spend cap (default `200.00`; operator clamp: `0.10-30000`) |
+| `mcp_servers` | list | [MCP tool servers](/features/mcp) — stdio transport only |
+
+Container hardening is enforced by the runtime: UID 1000, `cap_drop=ALL`, no-new-privileges, read-only filesystem, `tmpfs=/tmp 100m noexec/nosuid`, `pids_limit=256`. These are not user-tunable.
 
 ## `config/permissions.json` — Agent Permissions
 
-Per-agent access control with glob patterns for blackboard paths and explicit allowlists for messaging, pub/sub, and API access.
+Per-agent access control. **Default policy: deny.** A missing file denies everything. You may include a `"default"` template that other agents inherit from.
 
 ```json
 {
+  "default": {
+    "can_message": ["*"],
+    "blackboard_read": ["context/*", "tasks/*"]
+  },
   "researcher": {
-    "can_message": ["orchestrator"],
+    "can_message": ["operator", "writer"],
     "can_publish": ["research_complete"],
     "can_subscribe": ["new_lead"],
     "blackboard_read": ["tasks/*", "context/*"],
     "blackboard_write": ["context/prospect_*"],
-    "allowed_apis": ["llm", "brave_search"],
-    "allowed_credentials": ["brightdata_*"]
+    "allowed_apis": ["llm", "web_search"],
+    "allowed_credentials": ["brightdata_*"],
+    "can_use_browser": true,
+    "browser_actions": ["*"],
+    "can_manage_cron": true
   }
 }
 ```
@@ -119,54 +119,92 @@ Per-agent access control with glob patterns for blackboard paths and explicit al
 | `blackboard_read` | list | Glob patterns for readable blackboard keys |
 | `blackboard_write` | list | Glob patterns for writable blackboard keys |
 | `allowed_apis` | list | External APIs accessible through the vault |
-| `allowed_credentials` | list | Glob patterns for agent-tier credentials accessible to this agent |
-| `can_use_browser` | boolean | Access shared browser service (default: `false`) |
-| `can_spawn` | boolean | Spawn ephemeral fleet agents (default: `false`) |
-| `can_manage_cron` | boolean | Create/update/delete cron jobs (default: `false`) |
+| `allowed_credentials` | list | fnmatch globs (case-insensitive) for agent-tier credentials; `["*"]` = all agent-tier; system creds always blocked |
+| `can_use_browser` | bool | Access browser service container (default `false`) |
+| `browser_actions` | list / null | Allowlist of browser action names; `null` or `["*"]` = all known; `[]` = deny |
+| `can_spawn` | bool | Spawn ephemeral fleet agents (default `false`; **operator cannot grant this**) |
+| `can_manage_cron` | bool | Create/update/delete cron jobs |
+| `can_use_wallet` | bool | Use wallet tools (default `false`; **operator cannot grant this**) |
+| `wallet_allowed_chains` | list | EVM / Solana chain ids the agent may use |
+| `wallet_spend_limit_per_tx_usd` | float | Per-transaction USD cap (default 10.0) |
+| `wallet_spend_limit_daily_usd` | float | Daily USD cap (default 100.0) |
+| `wallet_rate_limit_per_hour` | int | Wallet ops per hour (default 10) |
+| `wallet_allowed_contracts` | list | Contract address allowlist (empty = native transfers only) |
 
-Default policy is **deny** — agents can only do what's explicitly permitted.
+**Control-plane flags** (six; defaults are `true` for the operator, `false` for workers):
 
-## `config/workflows/*.yaml` — Workflow Definitions
+`can_manage_fleet`, `can_manage_projects`, `can_edit_agent_config`, `can_view_fleet_metrics`, `can_route_tasks`, `can_request_user_credentials`.
 
-See [Workflows](/features/workflows) for the full specification.
+**Operator ceiling:** the operator cannot grant `can_spawn=true` or `can_use_wallet=true` to any agent — those flags must be edited directly in `permissions.json` (or via a setting-level tool that bypasses the operator).
 
-## `.env` — API Keys
+## `.env` — API Keys and Runtime Tunables
 
-Managed automatically by `openlegion start` and the `/addkey` REPL command. Can also be edited directly. Uses a two-tier prefix system:
+Managed automatically by `openlegion start` and the `/addkey` REPL command. Can also be edited directly. The file is rewritten atomically with `chmod 0o600`; keys are validated against `^[A-Za-z_][A-Za-z0-9_]*$` and `\r\n` is rejected in keys/values to prevent env injection.
 
 ```bash
-# System tier — LLM provider keys (never accessible by agents)
+# System tier — LLM provider keys (mesh-only; never accessible by agents)
 OPENLEGION_SYSTEM_ANTHROPIC_API_KEY=sk-ant-...
 OPENLEGION_SYSTEM_OPENAI_API_KEY=sk-...
 OPENLEGION_SYSTEM_MOONSHOT_API_KEY=sk-...
 
-# Agent tier — tool/service keys (access controlled per-agent)
-OPENLEGION_CRED_BRAVE_SEARCH_API_KEY=BSA...
+# OAuth blobs (Anthropic Claude CLI / OpenAI Codex CLI imports)
+# OPENLEGION_SYSTEM_ANTHROPIC_OAUTH={...}
+# OPENLEGION_SYSTEM_OPENAI_OAUTH={...}
 
-# Channel tokens
+# Wallet (per-agent EVM + Solana keys derive from this)
+# OPENLEGION_SYSTEM_WALLET_MASTER_SEED="word1 word2 ... word24"
+# OPENLEGION_SYSTEM_WALLET_LIMIT_PER_TX_USD=10
+# OPENLEGION_SYSTEM_WALLET_DAILY_USD=100
+# OPENLEGION_SYSTEM_WALLET_RATE_LIMIT_PER_HOUR=10
+
+# Agent tier — tool/service keys (access controlled per-agent via allowed_credentials)
+OPENLEGION_CRED_WEB_SEARCH_API_KEY=...
+
+# Channel tokens (presence of the token activates the channel — no separate enable flag)
 OPENLEGION_CRED_TELEGRAM_BOT_TOKEN=123456:ABC...
 OPENLEGION_CRED_DISCORD_BOT_TOKEN=MTIz...
 OPENLEGION_CRED_SLACK_BOT_TOKEN=xoxb-...
 OPENLEGION_CRED_SLACK_APP_TOKEN=xapp-...
 OPENLEGION_CRED_WHATSAPP_ACCESS_TOKEN=EAAx...
 OPENLEGION_CRED_WHATSAPP_PHONE_NUMBER_ID=1234...
+WHATSAPP_APP_SECRET=...                  # REQUIRED in prod; otherwise channel raises RuntimeError
 
-# Log format: "json" (default) or "text" (human-readable)
-OPENLEGION_LOG_FORMAT=text
+# Runtime tunables
+OPENLEGION_LOG_FORMAT=text                # "json" (default) or "text"
+OPENLEGION_TOOL_TIMEOUT=300               # tool execution timeout in seconds
+OPENLEGION_MAX_ITERATIONS=20              # task-mode iteration cap (clamp 1-100)
+OPENLEGION_CHAT_MAX_TOOL_ROUNDS=30        # chat per-turn tool rounds (clamp 1-200)
+OPENLEGION_CHAT_MAX_TOTAL_ROUNDS=200      # chat total rounds (clamp 1-1000)
+OPENLEGION_ORCHESTRATION_TASKS_V2=1       # durable task records (default ON)
+OPENLEGION_MAX_AGENTS=0                   # 0 = unlimited (but counter-intuitively falls into Basic browser tier)
+OPENLEGION_MAX_PROJECTS=                  # unset = unlimited; 0 = disabled; N>0 = capped
+OPENLEGION_PROJECT_SCOPE_MODE=enforce
+OPENLEGION_BROWSER_MAX_CONCURRENT=        # clamp 1-64; legacy alias MAX_BROWSERS
 ```
 
-`OPENLEGION_SYSTEM_*` keys are used exclusively for LLM provider calls and are never accessible to agents. `OPENLEGION_CRED_*` keys are agent-tier — access is controlled per-agent via the `allowed_credentials` field in permissions. Neither tier is ever exposed to agent containers directly.
+`OPENLEGION_SYSTEM_*` keys are reserved for mesh-tier use (LLM proxy, wallet seed, etc.) and are never accessible to agents. `OPENLEGION_CRED_*` keys are agent-tier — access is controlled per-agent via the `allowed_credentials` field in permissions. Agents reference them as opaque `$CRED{name}` handles in tool arguments; the real value is substituted in the mesh.
 
-## Project Structure
+<Warning>
+  `OPENLEGION_MAX_AGENTS=0` (default) means "unlimited agents" but **falls into the Basic browser-service tier** (2GB / 512MB / 1.0 CPU / 1 browser). Set it explicitly to scale browser-service resources: 2-5 → Growth, 6-15 → Pro, >15 → Pro Max.
+</Warning>
 
-```
-config/
-├── mesh.yaml                           # Framework settings
-├── agents.yaml                         # Agent definitions (per-project)
-├── permissions.json                    # Per-agent ACLs
-├── cron.json                           # Persistent cron jobs
-└── workflows/                          # Workflow YAML definitions
+## Other Config Locations
 
-PROJECT.md                              # Fleet-wide context
-.env                                    # API keys (gitignored)
-```
+| Path | Purpose |
+|---|---|
+| `config/mesh.yaml` | Mesh host, LLM defaults, channel routing |
+| `config/permissions.json` | Per-agent ACL matrix |
+| `config/cron.json` | Cron / heartbeat state (auto-managed) |
+| `config/projects/{name}/` | Per-project metadata + `project.md` |
+| `config/settings.json` | Dashboard-managed browser flags & runtime overrides (4 CAPTCHA-solver-cred names are blacklisted from this file at load — env-only) |
+| `config/api_keys.json` | Named API keys for the mesh (stored as salted SHA-256 hashes) |
+| `config/network.yaml` | `no_proxy` exclusion list |
+| `data/captcha_costs.json` | CAPTCHA spend ledger in millicents (chmod 0o600) |
+| `data/costs.db` | Per-agent + per-project LLM cost ledger (SQLite WAL) |
+| `.env` | API keys / credentials |
+
+## Browser Flags (`config/settings.json` / env)
+
+53 entries in `KNOWN_FLAGS` group into: profile / network (`BROWSER_OS`, `_LOCALE`, `_UA_VERSION`, `_DEVICE_PROFILE`, HTTP/HTTPS proxy fields, egress allowlist), CAPTCHA solver, CAPTCHA timeouts, CAPTCHA solver proxy, CAPTCHA pacing, CAPTCHA cost caps, operator kill switches (`BROWSER_DOWNLOADS_DISABLED`, `BROWSER_NETWORK_INSPECT_DISABLED`, `BROWSER_COOKIE_IMPORT_DISABLED`, `CAPTCHA_DISABLED`), snapshot / screenshot, behavior recorder, upload staging, session continuity, browser concurrency.
+
+The four CAPTCHA-solver credential names (`CAPTCHA_SOLVER_KEY`, `_SECONDARY`, `CAPTCHA_SOLVER_PROXY_LOGIN`, `_PASSWORD`) are `_ENV_ONLY_FLAGS` — they are stripped from `config/settings.json` at load and must be supplied via environment.

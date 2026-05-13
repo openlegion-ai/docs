@@ -10,11 +10,11 @@ Five layers give agents persistent, self-improving memory across sessions.
 
 ```
 Layer 5: Context Manager          <- Manages the LLM's context window
-  |  Monitors token usage
-  |  Proactive flush at 60% capacity
-  |  Auto-compacts at 70% capacity
+  |  Monitors token usage (tiktoken for OpenAI, 3.5 chars/token Anthropic,
+  |    4 chars/token fallback)
+  |  Proactive flush facts at 60% capacity
+  |  Auto-compact summarize at 70% capacity
   |  Warning at 80% capacity
-  |  Emergency hard-prune at 90% capacity
   |  Extracts facts before discarding messages
   |
 Layer 4: Learnings                <- Self-improvement through failure tracking
@@ -23,27 +23,38 @@ Layer 4: Learnings                <- Self-improvement through failure tracking
   |  Auto-injected into system prompt each session
   |
 Layer 3: Workspace Files          <- Durable, human-readable storage
-  |  INSTRUCTIONS.md (8K cap)     (loaded into system prompt)
-  |  SOUL.md (4K cap)             (agent personality and behavioral instructions)
+  |  SOUL.md (4K cap)             (personality + behavioral instructions)
+  |  INSTRUCTIONS.md (12K cap)    (loaded into system prompt)
   |  USER.md (4K cap)             (user preferences and context)
-  |  PROJECT.md (read-only)       (optional project context)
-  |  SYSTEM.md (6K cap, read-only, auto-generated) (architecture guide + runtime snapshot)
   |  MEMORY.md (16K cap)          (curated long-term facts)
-  |  HEARTBEAT.md                 (autonomous monitoring rules)
+  |  INTERFACE.md (4K cap)        (cross-agent interface contract)
+  |  AGENTS.md (12K cap)          (engine-root agent descriptions)
+  |  HEARTBEAT.md (uncapped)      (autonomous monitoring rules)
+  |  PROJECT.md (read-only)       (optional project context, bootstrap-only)
+  |  SYSTEM.md (6K cap, read-only, auto-generated, 5-min refresh)
   |  memory/YYYY-MM-DD.md         (daily session logs)
-  |  BM25 search across all files
+  |  Total bootstrap injection cap: 48K chars
+  |  BM25 search (k1=1.5, b=0.75) across markdown files
   |
-Layer 2: Structured Memory DB     <- Hierarchical vector database
+Layer 2: Structured Memory DB     <- Hybrid vector + keyword
   |  SQLite + sqlite-vec + FTS5
-  |  Facts with embeddings (KNN similarity search)
+  |  Facts with embeddings — text-embedding-3-small (1536 dims)
   |  Auto-categorization with category-scoped search
   |  3-tier retrieval: categories -> scoped facts -> flat fallback
-  |  Reinforcement scoring with access-count boost + recency decay
+  |  Hybrid scoring: (0.7 * vector + 0.3 * keyword) * decay_score
   |
 Layer 1: Salience Tracking        <- Prioritizes important facts
-     Access count, decay score, last accessed timestamp
+     SALIENCE_DECAY_RATE=0.95
+     Access-count boost capped at 10.0
      High-salience facts auto-surface in initial context
 ```
+
+## Embedding & Vector Search
+
+The structured memory store uses **OpenAI `text-embedding-3-small` (1536 dimensions)** for vector search. Two important behaviors:
+
+- **Non-OpenAI providers degrade to keyword-only.** If no OpenAI key is configured the embedding provider defaults to `"none"` and the store falls back to FTS5 keyword search.
+- **Auto-disable on consecutive failures.** After **3 consecutive embedding failures** the store silently disables vectors for the process lifetime (keyword search continues). Restart to retry.
 
 ## Write-Then-Compact Pattern
 
@@ -74,22 +85,26 @@ Session 2: User asks "What is my cat's name?"
 
 | Tool | Purpose |
 |------|---------|
-| `memory_search` | Hybrid search across workspace files and structured DB |
-| `memory_save` | Save fact to workspace and structured memory DB |
+| `memory_search` | Hybrid search across workspace files (BM25) and structured DB (vector + FTS5) |
+| `memory_save` | Save fact to daily log + structured memory DB |
 
 ## Workspace Files
 
-Each agent has a persistent workspace at `/data/workspace/`:
+Each agent has a persistent workspace at `/data/workspace/`. The scaffold set (`_SCAFFOLD_FILES`) is six files: SOUL, INSTRUCTIONS, USER, MEMORY, INTERFACE, HEARTBEAT. AGENTS.md is symlinked from the engine root.
 
-| File | Purpose |
-|------|---------|
-| `INSTRUCTIONS.md` | Fleet-wide agent descriptions — loaded into system prompt (8K cap) |
-| `SOUL.md` | Agent personality and behavioral instructions (4K cap) |
-| `USER.md` | User preferences and context (4K cap) |
-| `PROJECT.md` | Optional project context (read-only) |
-| `SYSTEM.md` | Auto-generated architecture guide and runtime snapshot (6K cap, read-only) |
-| `MEMORY.md` | Curated long-term facts (16K cap) |
-| `HEARTBEAT.md` | Autonomous monitoring rules |
-| `memory/YYYY-MM-DD.md` | Daily session logs |
-| `learnings/errors.md` | Tool failure history |
-| `learnings/corrections.md` | User correction history |
+| File | Cap | Purpose |
+|------|-----|---------|
+| `SOUL.md` | 4K | Agent personality and behavioral instructions |
+| `INSTRUCTIONS.md` | 12K | Operator-edited fleet instructions — loaded into system prompt |
+| `USER.md` | 4K | User preferences and context |
+| `MEMORY.md` | 16K | Curated long-term facts |
+| `INTERFACE.md` | 4K | Cross-agent interface contract (capabilities, calling conventions) |
+| `AGENTS.md` | 12K | Engine-root agent descriptions (CLAUDE.md symlink) |
+| `HEARTBEAT.md` | uncapped | Autonomous monitoring rules |
+| `PROJECT.md` | read-only | Optional project context (bootstrap-only) |
+| `SYSTEM.md` | 6K (read-only) | Auto-generated architecture guide + runtime snapshot, refreshed every 5 minutes |
+| `memory/YYYY-MM-DD.md` | — | Daily session logs |
+| `learnings/errors.md` | — | Tool-failure history |
+| `learnings/corrections.md` | — | User-correction history |
+
+Direct writes to SOUL / INSTRUCTIONS / USER / MEMORY / INTERFACE / HEARTBEAT / AGENTS are **blocked** — agents must go through the `update_workspace` tool, which enforces caps and emits HTTP 413 when exceeded. Workspace bootstrap injection is capped at **48K total chars** across all files.

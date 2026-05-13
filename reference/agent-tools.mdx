@@ -4,106 +4,155 @@ description: "All built-in tools available to agents"
 icon: "toolbox"
 ---
 
-Every agent has access to 47 built-in tools. Agents can also [create custom skills](/features/agents#self-extending-skills) at runtime and use [MCP tool servers](/features/mcp).
+OpenLegion ships a set of `@skill`-decorated built-in tools organized into modules under `engine/src/agent/builtins/`. Worker agents see a curated subset based on their `permissions.json` ACL; the operator agent sees additional control-plane tools. Agents can also [create custom skills](/features/agents) at runtime (AST-validated) and use [MCP tool servers](/features/mcp).
+
+Every tool call has a default `OPENLEGION_TOOL_TIMEOUT` of 300s.
 
 ## Execution
 
 | Tool | Purpose |
 |------|---------|
-| `run_command` | Shell command execution (max timeout 300s) |
+| `run_command` | Shell command execution, scoped to `/data`, 300s ceiling |
 
 ## File Operations
+
+All file operations are scoped to `/data` with 4-stage path-traversal protection. Limits: `_MAX_READ=500_000` bytes, `_MAX_LIST_ENTRIES=500`. Direct writes to workspace files (SOUL/INSTRUCTIONS/USER/MEMORY/HEARTBEAT/AGENTS/INTERFACE) are blocked at this layer — use `update_workspace` instead.
 
 | Tool | Purpose |
 |------|---------|
 | `read_file` | Read file contents from `/data` |
-| `write_file` | Write/append file in `/data` |
-| `list_files` | List/glob files in `/data` |
+| `write_file` | Write / append file in `/data` |
+| `list_files` | List / glob files in `/data` |
 
 ## HTTP
 
 | Tool | Purpose |
 |------|---------|
-| `http_request` | HTTP GET/POST/PUT/DELETE/PATCH |
+| `http_request` | HTTP GET / POST / PUT / DELETE / PATCH with `$CRED{name}` substitution |
+
+SSRF protection is enforced at the mesh: DNS pinning, RFC1918 / loopback / link-local / CGNAT / 6to4 / Teredo / IPv4-mapped-IPv6 blocking, fail-closed on DNS error, max 5 redirects (re-validated at each hop), cross-origin auth strip.
 
 ## Browser Automation
+
+Camoufox (stealth Firefox fork) **per agent**, lazy-spawned on X displays `:100..:163` (64 slots) paired with KasmVNC ports `6100..6163`. The browser-service **container** is shared (FastAPI `:8500`); the Camoufox instance is per-agent. All browser actions are `parallel_safe=False` per `agent_id`.
 
 | Tool | Purpose |
 |------|---------|
 | `browser_navigate` | Open URL, extract page text |
-| `browser_get_elements` | Accessibility tree snapshot with element refs (e1, e2, ...) |
-| `browser_screenshot` | Capture page screenshot |
+| `browser_warmup` | Pre-spawn the browser for an agent without navigating |
+| `browser_get_elements` | A11y-tree snapshot (200-element cap, iframe nesting cap 3) with element refs (`e1, e2, …`) |
+| `browser_screenshot` | Capture page screenshot (WebP by default) |
 | `browser_click` | Click element by ref or CSS selector |
+| `browser_click_xy` | Click absolute (x, y) coordinates |
 | `browser_type` | Fill input by ref or CSS selector |
-| `browser_scroll` | Scroll page up/down or scroll element into view |
 | `browser_hover` | Hover over element by ref or CSS selector |
-| `browser_press_key` | Press keyboard key (Enter, Escape, Tab, etc.) |
+| `browser_scroll` | Scroll page or scroll element into view |
 | `browser_wait_for` | Wait for element, navigation, or network idle |
-| `browser_go_back` | Navigate back in browser history |
-| `browser_go_forward` | Navigate forward in browser history |
-| `browser_switch_tab` | Switch between open browser tabs |
+| `browser_find_text` | Locate visible text on page |
+| `browser_fill_form` | Fill a form (max 50 fields per call) |
+| `browser_press_key` | Press keyboard key (Enter, Escape, Tab, …) |
+| `browser_open_tab` | Open a new tab |
+| `browser_switch_tab` | Switch between open tabs |
+| `browser_go_back` | Navigate back in history |
+| `browser_go_forward` | Navigate forward in history |
 | `browser_reset` | Force-close browser and reconnect fresh |
-| `browser_solve_captcha` | Auto-solve CAPTCHAs on the current page |
+| `browser_inspect_requests` | Inspect network requests (200-entry buffer) |
+| `browser_upload_file` | Upload (max 5 files, 50 MB each; 60s stage TTL) |
+| `browser_download` | Download a file |
+| `browser_detect_captcha` | Detect captcha presence and kind |
+| `browser_solve_captcha` | Auto-solve via 2captcha / capsolver (reCAPTCHA v2/v3/enterprise, hCaptcha, Cloudflare Turnstile + interstitial, PerimeterX press-hold, DataDome, JS-challenges) |
+| `browser_request_captcha_help` | Route a captcha to the human operator (behavioral kinds) |
+| `browser_request_browser_login` | Route a login challenge to the human operator |
 
-All agents share a persistent Camoufox (stealth Firefox) browser service running in a separate container. KasmVNC serves a live browser view on port 6080.
+**Costs** for CAPTCHA solving are tracked in **millicents** (1/100,000 USD) with per-agent + per-tenant monthly caps and a fleet-wide `CAPTCHA_DISABLED` kill switch. Solver-provider circuit breaker: 3 failures / 5 min → open 10 min.
+
+**Session persistence** is opt-in (`BROWSER_SESSION_PERSISTENCE_ENABLED`, default FALSE; snapshot interval 60-3600s, default 300s).
+
+**Device profiles**: `desktop-windows` (default), `desktop-macos`, `mobile-ios`, `mobile-android`. Mobile profiles spoof UA strings only — the underlying Camoufox / Firefox engine and TLS/JA3 fingerprints remain desktop.
+
+**Fingerprint burn detection** uses a rolling window of 10; ≥50% rejection sets `fingerprint_burn=True`. **There is no auto-rotation** — the operator must rotate the profile and reset.
 
 ## Memory
 
 | Tool | Purpose |
 |------|---------|
-| `memory_search` | Hybrid search across workspace files and structured DB |
-| `memory_save` | Save fact to workspace and structured memory DB |
+| `memory_search` | Hybrid search across workspace files and the structured memory DB (BM25 + vector with `(0.7*vector + 0.3*keyword) * decay_score`) |
+| `memory_save` | Save a fact to workspace and structured memory DB |
 
-See the [Memory System](/features/memory) for details on the 5-layer memory architecture.
+Vector search uses `text-embedding-3-small` (OpenAI, 1536 dims). Non-OpenAI providers default to `"none"` and **degrade to keyword-only**; after 3 consecutive embedding failures the store silently disables vectors for the process lifetime.
+
+See the [Memory System](/features/memory) for full details on the 5-layer architecture.
 
 ## Web Search
 
 | Tool | Purpose |
 |------|---------|
-| `web_search` | Search the web via DuckDuckGo (no API key required) |
+| `web_search` | Search via DuckDuckGo HTML, no API key required (1-10 results) |
+
+## Image Generation
+
+| Tool | Purpose |
+|------|---------|
+| `generate_image` | Generate a PNG via Gemini (default) or OpenAI DALL-E 3; written to `/data/workspace/artifacts/` |
 
 ## Fleet Awareness
 
 | Tool | Purpose |
 |------|---------|
-| `notify_user` | Send a notification to the user (via active channel) |
+| `notify_user` | Send a notification to the user via the active channel |
 | `list_agents` | Discover other agents in the fleet |
-| `read_agent_history` | Read another agent's conversation logs |
+| `get_agent_profile` | Get role / status / capabilities of another agent |
+| `read_agent_history` | Read another agent's conversation logs (subject to ACL) |
 
 ## Workspace
 
 | Tool | Purpose |
 |------|---------|
-| `update_workspace` | Update identity files (SOUL.md, INSTRUCTIONS.md, USER.md, HEARTBEAT.md) |
+| `update_workspace` | Update identity / state files (SOUL.md, INSTRUCTIONS.md, USER.md, MEMORY.md, INTERFACE.md, AGENTS.md, HEARTBEAT.md) |
+
+Workspace caps (returned 413 on overflow): SOUL 4K, INSTRUCTIONS 12K, USER 4K, MEMORY 16K, INTERFACE 4K, AGENTS 12K, HEARTBEAT uncapped. `PROJECT.md` and `SYSTEM.md` are bootstrap-only and **read-only** at runtime.
 
 ## Introspection
 
 | Tool | Purpose |
 |------|---------|
-| `get_system_status` | Query own runtime state: permissions, budget, fleet, cron, health |
+| `get_system_status` | Query own runtime state: permissions, budget, fleet, cron, health (5-min cache) |
 
 ## Shared State (Blackboard)
 
+All blackboard operations are subject to per-agent `blackboard_read` / `blackboard_write` glob patterns. Writes are CAS-based via `write_if_version`.
+
 | Tool | Purpose |
 |------|---------|
-| `read_shared_state` | Read from the shared blackboard |
-| `write_shared_state` | Write to the shared blackboard |
-| `list_shared_state` | Browse blackboard entries by prefix |
+| `read_blackboard` | Read a blackboard key |
+| `write_blackboard` | Write to a blackboard key (atomic CAS) |
+| `list_blackboard` | Browse blackboard entries by prefix |
 | `watch_blackboard` | Watch for blackboard key changes (pattern-based) |
 | `publish_event` | Publish event to mesh pub/sub |
 | `subscribe_event` | Subscribe to mesh pub/sub events at runtime |
-| `claim_task` | Claim a task from the agent's task queue |
-| `save_artifact` | Save deliverable file and register on blackboard |
+| `claim_task` | Claim a task from the agent's lane queue (CAS) |
+| `save_artifact` | Save a deliverable file and register it on the blackboard |
 
-All blackboard operations are subject to [permission checks](/reference/configuration#configpermissionsjson--agent-permissions).
+## Coordination
+
+| Tool | Purpose |
+|------|---------|
+| `hand_off` | Hand a task off to another agent with structured payload (TTL 86400s) |
+| `check_inbox` | Check pending handoffs / messages |
+| `update_status` | Update own task status |
+| `complete_task` | Mark a claimed task complete |
+
+Coordination uses the durable V2 task ledger when `OPENLEGION_ORCHESTRATION_TASKS_V2=1` (default ON); V1 falls back to blackboard `tasks/{agent}/{handoff_id}` records.
 
 ## Scheduling
 
 | Tool | Purpose |
 |------|---------|
-| `set_cron` | Schedule a recurring job (pass `heartbeat=true` for autonomous monitoring with probes) |
+| `set_cron` | Schedule a recurring job |
 | `list_cron` | List scheduled jobs |
 | `remove_cron` | Remove a scheduled job |
+
+5-field cron (minute granularity) **or** `every N[s/m/h/d]` interval syntax. No 6-field / seconds support. Three modes: message-mode (LLM dispatch), tool-mode (`tool_name` / `tool_params` direct invoke — no LLM), and heartbeat-mode (`heartbeat=true`). Heartbeats default to `every 15m` (the operator's is force-locked to `every 15m`) and have a skip-LLM optimization that activates only when (not manual) + (HEARTBEAT.md is default) + (no recent activity) + (no probes triggered).
 
 See [Triggering & Automation](/features/triggering) for details.
 
@@ -111,24 +160,66 @@ See [Triggering & Automation](/features/triggering) for details.
 
 | Tool | Purpose |
 |------|---------|
-| `create_skill` | Write a new Python skill at runtime |
+| `create_skill` | Write a new Python skill at runtime (AST-validated against 23 forbidden imports, 16 forbidden calls, 11 forbidden attrs; `_MAX_SKILL_SIZE=10_000` chars) |
 | `reload_skills` | Hot-reload all skills |
+| `spawn_fleet_agent` | **Operator-only.** Spawn a new ephemeral fleet agent via the mesh. The operator cannot grant `can_spawn=true` to other agents. |
 
-## Agent Spawning
+## Subagent Spawning
 
 | Tool | Purpose |
 |------|---------|
-| `spawn_agent` | Spawn a new ephemeral agent in its own container via the mesh |
-| `spawn_subagent` | Spawn a lightweight in-process sub-agent (no container overhead) |
-| `list_subagents` | List active in-process sub-agents spawned by this agent |
+| `spawn_subagent` | Spawn a lightweight in-process subagent (no container overhead) |
+| `list_subagents` | List active subagents |
 | `wait_for_subagent` | Wait for a subagent to complete and return its result |
 
-`spawn_agent` creates a fully isolated container agent via the mesh host. `spawn_subagent` creates a lightweight in-process helper — faster but shares the parent's process. Sub-agents can nest up to depth 2 (max 3 concurrent per parent).
+Subagents have `MAX_DEPTH=2`, `MAX_CONCURRENT=3` per parent, default TTL 300s (max 600s), `DEFAULT_MAX_ITERATIONS=10`. **Subagents cannot recurse, cannot create skills, and cannot use the browser concurrently** (browser module is parallel-unsafe per agent).
 
 ## Credential Vault
 
 | Tool | Purpose |
 |------|---------|
-| `vault_generate_secret` | Generate a secure random secret |
-| `vault_capture_from_page` | Capture credentials from a browser page |
+| `vault_generate_secret` | Generate a secure random secret; returns a `$CRED{name}` handle only |
 | `vault_list` | List available credentials in the vault |
+| `request_credential` | Request the user provide a credential interactively (the only path for runtime credential capture) |
+
+Agents never see raw secret values — only opaque `$CRED{name}` handles that the mesh substitutes at call time. System-tier credentials (`OPENLEGION_SYSTEM_*`) are always blocked from agents regardless of `allowed_credentials`.
+
+## Wallet
+
+EVM chains (`evm:ethereum`, `evm:base`, `evm:arbitrum`, `evm:polygon`, `evm:sepolia`) and Solana (`solana:mainnet`, `solana:devnet`). Per-agent EVM keys derive via BIP-44 (`m/44'/60'/{agent_index}'/0/0`); per-agent Solana keys via HMAC-SHA512 over a PBKDF2 of the master seed. **Private keys never leave the mesh process.** The master seed is returned **once** at `POST /api/wallet/init` with `Cache-Control: no-store`; `GET /api/wallet/seed` returns HTTP 410 Gone afterward.
+
+| Tool | Purpose |
+|------|---------|
+| `wallet_get_address` | Get the agent's wallet address for a chain |
+| `wallet_get_balance` | Get native / token balance |
+| `wallet_read_contract` | Read from a smart contract |
+| `wallet_transfer` | Transfer native or token (rate-limited, capped) |
+| `wallet_execute` | Sign and submit a protocol transaction |
+
+Defaults: `LIMIT_PER_TX_USD=10`, `LIMIT_DAILY_USD=100`, `RATE_LIMIT_PER_HOUR=10`. Agents need `can_use_wallet=true` — **and the operator cannot grant this flag**; it must be edited directly in `permissions.json`.
+
+## Operator-Only Tools
+
+The operator agent has additional control-plane tools for fleet management. These are not available to worker agents.
+
+| Tool | Purpose |
+|------|---------|
+| `inspect_agents` | Inspect agents' configs / state |
+| `inspect_projects` | Inspect project metadata |
+| `manage_project` / `create_project` | Project lifecycle |
+| `add_agents_to_project` / `remove_agents_from_project` | Project membership |
+| `update_project_context` / `set_project_goal` | Project content |
+| `manage_agent` / `create_agent` | Agent lifecycle |
+| `edit_agent` | Edit agent config (soft fields = 5-min Undo TTL; hard fields = 30-min, require `confirm_edit`) |
+| `propose_edit` / `confirm_edit` | Legacy two-step edit flow |
+| `manage_task` | Manage durable tasks |
+| `save_observations` | Persist operator observations |
+| `undo_change` | Revert a recent soft edit |
+| `list_pending` / `cancel_pending_action` | Pending-action queue |
+| `archive_audit_before` | Archive audit log entries |
+| `list_agent_queue` | Inspect another agent's lane queue |
+| `get_team_outputs` / `summarize_project_progress` | Team reporting |
+| `apply_template` | Apply a fleet template (per-slot, **not atomic** — mid-loop failures leave earlier-created agents) |
+| `list_templates` | List available templates |
+
+**Hard / soft edit fields.** SOFT (5-min Undo): `instructions`, `soul`, `heartbeat`, `heartbeat_schedule`, `interface`, `role`. HARD (30-min confirmation): `model`, `permissions`, `budget`, `thinking`.

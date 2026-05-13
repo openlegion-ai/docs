@@ -4,32 +4,47 @@ description: "Monitor your instance and manage your subscription"
 icon: "gauge"
 ---
 
-The app dashboard at [app.openlegion.ai](https://app.openlegion.ai) is where you monitor your instance status and manage your subscription. For agent configuration and fleet management, use the [engine dashboard](/features/dashboard) on your subdomain.
+The app dashboard at [app.openlegion.ai](https://app.openlegion.ai) is where you monitor your instance status and manage your subscription. For agent configuration and fleet management, use the engine dashboard on your subdomain (covered at the bottom of this page).
 
 ## Fleet status
 
 When your instance is running, the dashboard shows:
 
-- **Status badge** — Online, Resizing, Starting up, or Paused
-- **Subdomain** — your fleet URL (`{subdomain}.engine.openlegion.ai`)
-- **Plan summary** — current plan, agent count, and project count
-- **Open Dashboard** button — takes you directly to your engine dashboard
+- **Status badge** — Online, Starting up, Resizing, Migrating, or Paused
+- **Subdomain** — your fleet URL (`{subdomain}.engine.openlegion.ai`) with a copy button
+- **Plan summary** — current plan, agents, browsers, projects, and credit balance
+- **Open Dashboard button** — the primary CTA; single-sign-on into your engine
 
-The page auto-refreshes when your instance is in a transitional state (starting up, resizing).
+The page auto-refreshes every 10s in transitional states (`starting up`, `resizing`).
+
+<Note>
+  **Migrating** is a defined status that the UI renders but is not reachable from current code paths — it's staged for a future feature.
+</Note>
+
+### Open Dashboard
+
+This button is the **only supported way** to enter your engine from the app. The app generates a short-lived HMAC-SHA256 token (5-minute TTL, one-time use), 302-redirects you through the auth-gate sidecar on your VPS, which then sets a 24h `ol_session` cookie. Direct navigation to your subdomain (e.g., from a bookmark) requires an existing session cookie. If your cookie has expired, return to the app and click **Open Dashboard** again.
+
+### Notifications and banners
+
+The fleet dashboard surfaces banners for: past-due payment, cancelled subscription (countdown), paused instance, resizing, migrating, and unhealthy.
 
 ## Instance states
 
+The fleet view condenses 15 internal status values into the user-facing badges above. The most common transitional and failure states you'll encounter:
+
 | State | Meaning |
 |-------|---------|
-| **Online** | Your fleet is running normally |
-| **Starting up** | Instance is recovering or restarting (auto-refreshes) |
-| **Resizing** | Server is being resized for a plan change (~1 minute) |
-| **Paused** | Instance paused due to a payment issue |
-| **Provisioning Failed** | Server setup didn't complete — retries from scratch |
+| **Online** (`running`) | Your fleet is running normally |
+| **Starting up** (`queued` → `provisioning` → `bootstrapping` → `awaiting_configuration` → `configuring`) | Initial provisioning or post-restart warm-up — auto-refreshes |
+| **Resizing** | Server is being resized for a plan change (~30-60s downtime) |
+| **Paused** | Instance paused due to a past-due payment (resumes automatically when payment succeeds) |
 | **Unhealthy** | Engine not responding to health checks. Auto-restart attempts in progress (max 3). |
-| **Configuration Failed** | Server is ready but configuration didn't complete — retry is usually quick |
+| **Provisioning Failed** (`failed` / `bootstrap_failed`) | Server setup didn't complete — retry runs from scratch (VPS is cleaned up first) |
+| **Configuration Failed** (`configuration_failed`) | Server is healthy but configuration didn't complete — retry just re-runs `/configure` (VPS is kept) |
+| **Decommissioned** (`deprovisioned`) | Subscription ended or unrecoverable failure — the app shows a Decommissioned card with a new-subscription CTA |
 
-If provisioning or configuration fails, you'll see a **Retry** button and a **Contact Support** link ([support@openlegion.ai](mailto:support@openlegion.ai)). Configuration failures retry just the configuration step. Full provisioning failures clean up the server and start fresh.
+If provisioning or configuration fails, the app renders a **Retry** button next to a **Contact Support** link ([admin@openlegion.ai](mailto:admin@openlegion.ai)).
 
 ## Settings
 
@@ -37,18 +52,58 @@ The **Settings** page shows your current plan and lets you:
 
 - **Change plan** — select a different tier or switch between monthly and yearly billing
 - **Resume** — reactivate a cancelled subscription before the period ends
-- **Cancel** — cancel your subscription (active until end of billing period)
+- **Cancel** — cancel your subscription (access kept until end of billing period)
+- **Keep current plan** — cancel a pending downgrade so you stay on your current tier at renewal
 
 See [Plans & Billing](/managed/plans) for details on upgrades, downgrades, and payment handling.
 
+## Credits
+
+The **Credits** page (`/credits` in the app) shows your current OpenLegion credit balance and lets you top up. Every managed instance ships with the `openlegion/openai/gpt-5.4` credit-backed default model; welcome credits are granted on first subscription activation.
+
+## What the app dashboard does not do
+
+The app dashboard is intentionally narrow:
+
+- No user-initiated pause / resume (pause only triggers after 3 days past-due)
+- No region picker (server location chosen by provisioner fallback chain)
+- No "rotate access token" UI
+- No re-configure API keys UI (manage those from the engine's **Settings → API Keys** tab)
+- No multi-instance support — one VPS per subscription
+- No log streaming, per-agent metrics, or backup/restore UX
+- No direct agent control, chat UI, or project management — all of that lives on the engine dashboard
+
 ## Engine dashboard
 
-The engine dashboard at `{subdomain}.engine.openlegion.ai/dashboard` is where you do the actual work with your agents. See the [Dashboard](/features/dashboard) page for full documentation on what's available there, including:
+The engine dashboard at `{subdomain}.engine.openlegion.ai` is where you do the actual work with your agents. Open it via the app's **Open Dashboard** button (see SSO note above).
 
-- Agent configuration and monitoring
-- Live event feed and request traces
-- Chat with agents directly
-- Shared blackboard browser
-- Cost tracking and budgets
-- Cron jobs and automation
-- Browser viewer for agent browser sessions
+The engine SPA is built on Alpine.js + Tailwind with no build step. It serves 143 dashboard API endpoints and streams real-time updates over a `/ws/events` WebSocket (50 event types, 500-event ring buffer).
+
+### Four top-nav tabs
+
+| Tab | Internal id | What you do here |
+|---|---|---|
+| **Chat** | `chat` | Multi-agent chat. Your primary conversation surface. Per-token streaming chat over a dedicated endpoint. |
+| **Work** | `workplace` | Kanban (Pending / Working / Blocked / Done), "Needs You" panel, activity feed with pinned blockers, recently delivered previews. |
+| **Team** | `fleet` | Agent grid — inspect, edit, and manage individual agents (model, budget, soul, instructions, permissions). |
+| **Settings** | `system` | 11 sub-tabs (below). |
+
+Internal ids are frozen for URL stability — the user-facing labels diverged.
+
+### Settings sub-tabs (11)
+
+Activity, Costs, Automation, Integrations, API Keys, Wallet, Network, Storage, Operator, Browser, Settings.
+
+Highlights:
+
+- **Costs** — per-agent / per-project LLM cost ledger with daily and monthly budgets.
+- **Automation** — cron jobs and heartbeats (5-field cron or `every N[s/m/h/d]` interval).
+- **Integrations** — channel setup (Telegram / Discord / Slack / WhatsApp / Webhook) and webhook creation (webhooks are dashboard-only).
+- **API Keys** — add or replace LLM provider keys (BYOK overlay on top of the OpenLegion credit proxy).
+- **Wallet** — seed reveal is **once-only** (HTTP 410 thereafter); per-agent EVM + Solana addresses; spend caps and rate limits.
+- **Browser** — Camoufox flags, CAPTCHA solver config, device profiles, fingerprint controls. (Fingerprint burn detection does not auto-rotate — operator action required.)
+- **Operator** — operator-only control plane: edit agents, project management, pending actions.
+
+### Browser viewer
+
+Each agent gets its own Camoufox (stealth Firefox) instance in the shared browser-service container, lazy-spawned on first use. The dashboard provides a per-agent live VNC view via the engine's `/agent-vnc/{agent_id}/{path}` proxy. The VNC proxy **only accepts the `ol_session` cookie** — agent Bearer tokens are rejected.

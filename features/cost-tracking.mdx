@@ -1,19 +1,19 @@
 ---
 title: "Cost Tracking & Budgets"
-description: "Per-agent LLM spend tracking with budget enforcement"
+description: "Per-agent and per-project LLM spend tracking with budget enforcement"
 icon: "dollar-sign"
 ---
 
-Every LLM call is tracked at the Credential Vault layer. Per-agent budgets prevent runaway spend.
+Every LLM call is proxied through the mesh; usage is recorded in a SQLite WAL cost ledger at `data/costs.db`. Costs are computed via `estimate_cost()` against LiteLLM's model registry, then enforced against per-agent budgets.
 
 ## How It Works
 
-1. Agent makes an LLM call through the mesh proxy
-2. The vault checks the agent's remaining budget **before** forwarding to the provider
-3. If the agent has exceeded its budget, the vault rejects the call with an error
-4. After a successful call, token usage and cost are recorded in the cost tracker (SQLite)
+1. Agent makes an LLM call through the mesh proxy.
+2. The mesh checks the agent's remaining budget **before** forwarding to the provider.
+3. If the agent has exceeded its daily or monthly budget, the call is rejected.
+4. After a successful call, token usage and dollar cost are recorded in `data/costs.db`.
 
-Agents physically cannot spend what you haven't authorized.
+Because agent containers hold no provider keys and all calls proxy through the mesh, an agent cannot bypass the budget check.
 
 ## Configuring Budgets
 
@@ -27,7 +27,15 @@ agents:
       monthly_usd: 100.00
 ```
 
-Default budgets are $10/day and $200/month per agent. When an agent exceeds its daily or monthly budget, subsequent LLM calls are rejected until the budget resets.
+**Defaults:** $10/day, $200/month per agent.
+
+**Allowed range:** daily $0.01–$1000, monthly $0.10–$30000. Values outside this range are rejected at config-load time.
+
+When an agent exceeds its daily or monthly budget, subsequent LLM calls are rejected until the budget resets.
+
+## Per-project rollups
+
+Costs are tracked **per-agent and per-project**. The cost ledger keys on both, so you can see what each project is spending in aggregate across all its agents. Per-project rollups surface in the dashboard at **Settings → Costs**.
 
 ## Viewing Costs
 
@@ -37,8 +45,14 @@ From the interactive REPL:
 /costs
 ```
 
-This shows spend per agent for today, this week, and this month, including token counts and dollar amounts.
+Shows per-agent spend for today, this week, and this month, including token counts and dollar amounts.
+
+In the dashboard, **Settings → Costs** shows per-agent and per-project breakdowns with a period selector and per-agent budget bars.
+
+## CAPTCHA Costs
+
+CAPTCHA solver spend is tracked **separately** from LLM cost, in **millicents (1/100,000 USD)**, in `data/captcha_costs.json` (`chmod 0o600`). Both per-agent and per-tenant monthly USD caps apply, with alerts at **50% / 80% / 100%** of the cap. The fleet-wide kill switch `CAPTCHA_DISABLED` stops all CAPTCHA solving regardless of budget.
 
 ## Model Failover and Costs
 
-When using [failover chains](/concepts/architecture#model-failover), cost tracking follows the call to whichever model actually handles it. If the primary model fails and the request cascades to a cheaper fallback, only the fallback cost is recorded.
+When using [failover chains](/concepts/architecture#model-failover), cost tracking follows the call to whichever model actually handles it. If the primary model fails and the request cascades to a cheaper fallback, only the fallback cost is recorded against the agent's budget.
