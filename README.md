@@ -54,4 +54,4 @@ Found an error or something missing? Issues and pull requests welcome.
 
 ## License
 
-BSL 1.1
+PolyForm Perimeter License 1.0.1
