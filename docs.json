@@ -8,6 +8,10 @@
     "dark": "#1D4ED8"
   },
   "favicon": "/favicon.ico",
+  "banner": {
+    "content": "These docs cover OpenLegion v1, the self-hosted runtime. OpenLegion has been rebuilt as a hosted platform, now in private beta: [openlegion.ai](https://www.openlegion.ai).",
+    "dismissible": false
+  },
   "navigation": {
     "tabs": [
       {
